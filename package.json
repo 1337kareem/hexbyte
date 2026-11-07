@@ -1,0 +1,9 @@
+{
+  "name": "hexbyte",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "spell": "node --env-file-if-exists=.env scripts/cast-spell.mjs"
+  }
+}
