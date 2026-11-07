@@ -4,6 +4,23 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "spell": "node --env-file-if-exists=.env scripts/cast-spell.mjs"
+    "postinstall": "node scripts/setup-assets.mjs",
+    "dev": "vite --port 5175 --strictPort",
+    "build": "vite build",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "demo": "vite build && node --env-file-if-exists=.env server/index.js",
+    "test": "node --test \"test/*.test.js\"",
+    "spell": "node --env-file-if-exists=.env scripts/cast-spell.mjs",
+    "check:sponsors": "node --env-file-if-exists=.env scripts/check-sponsors.mjs"
+  },
+  "dependencies": {
+    "@auth0/auth0-spa-js": "^2.30.0",
+    "@mediapipe/tasks-vision": "^1.2.2",
+    "express": "^5.3.0",
+    "jose": "^6.2.15",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.6"
   }
 }

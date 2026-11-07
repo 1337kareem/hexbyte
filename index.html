@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/icon.svg" />
+    <title>HexByte</title>
+  </head>
+  <body>
+    <main id="app">
+      <section id="title" class="screen">
+        <header class="brand">
+          <h1>HexByte</h1>
+          <p>A wizard duel you cast with your hands. Every spell is judged by AI through Prune.</p>
+        </header>
+
+        <p id="notice" class="notice" role="status"></p>
+
+        <div class="lobby">
+          <article class="slot" data-side="0"></article>
+          <div class="versus">vs</div>
+          <article class="slot" data-side="1"></article>
+        </div>
+
+        <div class="start-row">
+          <fieldset class="mode">
+            <legend>Controls</legend>
+            <label><input type="radio" name="mode" value="camera" checked /> Camera (gestures + voice)</label>
+            <label><input type="radio" name="mode" value="keyboard" /> Keyboard (typed incantations)</label>
+          </fieldset>
+          <button id="start" class="primary">Start the duel</button>
+        </div>
+
+        <section class="howto">
+          <h2>How to duel</h2>
+          <ol>
+            <li><b>Hold a gesture</b> for half a second: ✊ fire, ✋ shield, ✌️ lightning. Player 1 stands on the left.</li>
+            <li><b>Say an incantation.</b> The AI rates its creativity from 1 to 10, and power sets the damage.</li>
+            <li><b>Mana is limited.</b> Prune counts your spells and stops you when you run out.</li>
+            <li><b>No cheating.</b> Incantations that try to rewrite the rules get blocked by Prune and backfire.</li>
+          </ol>
+          <p class="keys">Keyboard: Player 1 uses <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, Player 2 uses <kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> (fire, shield, lightning).</p>
+        </section>
+
+        <section id="stats" class="stats" aria-live="polite"></section>
+        <p id="sponsors" class="sponsors"></p>
+      </section>
+
+      <section id="duel" class="screen" hidden>
+        <div class="stage">
+          <video id="video" playsinline muted></video>
+          <canvas id="canvas" aria-label="Duel arena"></canvas>
+          <form class="say" data-side="0" hidden>
+            <label for="say-0">Player 1, type your incantation</label>
+            <input id="say-0" autocomplete="off" maxlength="160" />
+          </form>
+          <form class="say" data-side="1" hidden>
+            <label for="say-1">Player 2, type your incantation</label>
+            <input id="say-1" autocomplete="off" maxlength="160" />
+          </form>
+          <p id="stage-status" class="stage-status"></p>
+        </div>
+        <aside class="log">
+          <h2>Combat log</h2>
+          <p class="log-help">Every spell has a receipt signed by Prune. Verify it, or tamper with it and watch it fail.</p>
+          <ol id="log"></ol>
+        </aside>
+      </section>
+
+      <section id="results" class="screen" hidden>
+        <h1 id="winner"></h1>
+        <div id="summary" class="summary"></div>
+        <div class="actions">
+          <button id="replay" class="primary">Watch the instant replay</button>
+          <button id="rematch">Rematch</button>
+          <button id="back">Back to the lobby</button>
+        </div>
+        <p id="results-note" class="notice"></p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
