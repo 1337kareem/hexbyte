@@ -1,5 +1,6 @@
 import './styles.css';
 import { ELEMENT_ICONS, GESTURE_ELEMENTS } from '../shared/rules.js';
+import { Sound } from './audio.js';
 import { forgetWizard, initAuth, savedWizards, signIn } from './auth.js';
 import { Duel } from './duel.js';
 import { COLORS, Renderer } from './render.js';
@@ -10,6 +11,7 @@ const $ = (selector) => document.querySelector(selector);
 const screens = { title: $('#title'), duel: $('#duel'), results: $('#results') };
 const video = $('#video');
 const renderer = new Renderer($('#canvas'), video);
+const sound = new Sound();
 
 const KEYS = {
   1: [0, 'Closed_Fist'],
@@ -34,6 +36,13 @@ let frames = [];
 let lastFrameAt = 0;
 let flushTimer = null;
 let replay = null;
+let listening = 0;
+let lastTickSecond = null;
+// The server signs each match into a token, and every request about the match carries it.
+let matchToken = null;
+// The browser's own copy of the duel, so the replay works even if the server lost its copy.
+let recording = { matchId: null, frames: [], spells: [] };
+const MAX_RECORDED_FRAMES = 6000;
 
 async function api(path, body) {
   const options =
@@ -187,16 +196,66 @@ async function startDuel(players) {
     }
   }
 
+  matchToken = match.matchToken;
+  recording = { matchId: match.matchId, frames: [], spells: [] };
   duel = new Duel({
     match,
     listen,
-    cast: (body) => api('/api/spell', body),
+    cast: (body) => api('/api/spell', { ...body, matchToken }),
     onLog: addLog,
     onEnd: endDuel,
+    onEvent: playDuelSound,
   });
+  listening = 0;
+  lastTickSecond = null;
+  sound.setTension(false);
+  sound.startMusic('duel');
   frames = [];
   clearInterval(flushTimer);
   flushTimer = setInterval(flushFrames, FLUSH_EVERY_MS);
+}
+
+// Every sound the duel makes, matched to what just happened on screen.
+function playDuelSound(name, details) {
+  const { side } = details;
+  if (name === 'listening') {
+    listening += 1;
+    if (mode === 'camera') sound.duck(true);
+  } else if (name === 'listened') {
+    listening = Math.max(0, listening - 1);
+    if (listening === 0) sound.duck(false);
+  } else if (name === 'channel') {
+    sound.channel(side, details.element);
+    sound.bump(0.12);
+  } else if (name === 'cast') {
+    if (details.element === 'fire') sound.fire(side, details.power);
+    else if (details.element === 'lightning') sound.lightning(1 - side);
+    else sound.shieldUp(side);
+    sound.bump(0.2);
+  } else if (name === 'hit') {
+    if (details.element === 'fire') sound.fireImpact(side, details.dealt + details.absorbed);
+    if (details.absorbed > 0) sound.blocked(side, details.absorbed);
+    if (details.dealt > 0) sound.hurt(side, details.dealt);
+    sound.bump(0.15);
+    updateTension();
+  } else if (name === 'backfire') {
+    sound.backfire(side);
+    sound.bump(0.15);
+    updateTension();
+  } else if (name === 'outOfMana') {
+    sound.outOfMana(side);
+  } else if (name === 'fizzle') {
+    sound.fizzle(side);
+  } else if (name === 'end') {
+    sound.finish({ knockout: details.knockout, draw: details.winner === -1 });
+    sound.duck(false);
+    sound.calm();
+  }
+}
+
+// A double heartbeat joins the music when either wizard is close to losing.
+function updateTension() {
+  sound.setTension(Boolean(duel && !duel.over && duel.players.some((player) => player.hp > 0 && player.hp <= 30)));
 }
 
 function listen(side, element) {
@@ -242,6 +301,10 @@ function typedIncantation(side, elementName) {
 }
 
 function addLog(entry) {
+  if (entry.outcome === 'cast' || entry.outcome === 'cheat') {
+    const { side, element, outcome, power, damage, name } = entry;
+    recording.spells.push({ t: Date.now(), side, element, outcome, power, damage, name });
+  }
   const icon = ELEMENT_ICONS[entry.element] ?? '•';
   const item = element('li', { className: `entry side-${entry.side} ${entry.outcome}` });
   const head = element('div', { className: 'entry-head' }, [
@@ -260,7 +323,7 @@ function addLog(entry) {
         textContent: `Cost $${Number(entry.costUsd ?? 0).toFixed(6)}${entry.effectText ? ` · ${entry.effectText}` : ''}`,
       }),
     );
-    if (entry.signed) item.append(receiptButtons(entry.spellId));
+    if (entry.receipt) item.append(receiptButtons(entry.receipt));
   } else if (entry.outcome === 'cheat') {
     item.append(element('p', { className: 'result', textContent: 'Blocked by Prune (prompt_injection). The spell backfired.' }));
   } else if (entry.outcome === 'out_of_mana') {
@@ -271,7 +334,8 @@ function addLog(entry) {
   $('#log').prepend(item);
 }
 
-function receiptButtons(spellId) {
+// The receipt stays in the browser exactly as Prune signed it. Prune checks the signature.
+function receiptButtons(receipt) {
   const result = element('span', { className: 'verdict' });
   const verify = element('button', { textContent: 'Verify receipt', className: 'small' });
   const tamper = element('button', { textContent: 'Tamper test', className: 'small' });
@@ -279,7 +343,7 @@ function receiptButtons(spellId) {
     result.textContent = 'Checking with Prune…';
     result.className = 'verdict';
     try {
-      const answer = await api('/api/verify', { spellId, tamper: tampered });
+      const answer = await api('/api/verify', { receipt, tamper: tampered });
       result.textContent = answer.valid
         ? `✓ Genuine. Signed by Prune key ${answer.keyId}`
         : `✗ Rejected (${answer.reason})${tampered ? ': we changed the cost, so the signature no longer matches' : ''}`;
@@ -299,7 +363,9 @@ function recordFrames(t) {
   const time = Date.now();
   vision.sides.forEach((side, index) => {
     if (!side.pose) return;
-    frames.push({ t: time, side: index, points: side.pose.flatMap((p) => [p.x, p.y]) });
+    const frame = { t: time, side: index, points: side.pose.flatMap((p) => [p.x, p.y]) };
+    frames.push(frame);
+    if (recording.frames.length < MAX_RECORDED_FRAMES) recording.frames.push(frame);
   });
 }
 
@@ -307,14 +373,14 @@ function flushFrames() {
   if (!duel || frames.length === 0) return;
   const batch = frames;
   frames = [];
-  api(`/api/match/${duel.matchId}/frames`, { frames: batch }).catch(() => {});
+  api(`/api/match/${duel.matchId}/frames`, { frames: batch, matchToken }).catch(() => {});
 }
 
 async function endDuel(result) {
   flushFrames();
   clearInterval(flushTimer);
   lastResult = result;
-  api(`/api/match/${result.matchId}/end`, { winner: result.winner, finalHp: result.finalHp }).catch(() => {});
+  api(`/api/match/${result.matchId}/end`, { winner: result.winner, finalHp: result.finalHp, matchToken }).catch(() => {});
   $('#winner').textContent = result.winner === -1 ? 'A draw!' : `${result.players[result.winner].name} wins!`;
   $('#summary').replaceChildren(
     ...result.players.map((player, side) =>
@@ -334,13 +400,16 @@ async function endDuel(result) {
 async function startReplay() {
   if (!lastResult) return;
   $('#results-note').textContent = 'Loading the replay…';
-  let data;
+  let data = { frames: [], spells: [] };
   try {
     data = await api(`/api/match/${lastResult.matchId}/replay`);
-  } catch (error) {
-    $('#results-note').textContent = `Replay unavailable: ${error.message}`;
-    return;
+  } catch {
+    // Fall back to the browser's own recording below.
   }
+  // Use whichever copy is more complete. On Vercel without Tiger Data, the server's
+  // temporary copy can disappear between requests.
+  const size = (copy) => copy.frames.length + copy.spells.length;
+  if (recording.matchId === lastResult.matchId && size(recording) > size(data)) data = recording;
   const times = [...data.frames.map((f) => f.t), ...data.spells.map((s) => s.t)];
   if (times.length === 0) {
     $('#results-note').textContent = 'Nothing was recorded for this duel.';
@@ -365,6 +434,19 @@ async function startReplay() {
   show('duel');
 }
 
+function replaySound(spell) {
+  if (spell.outcome === 'cheat') {
+    sound.backfire(spell.side);
+  } else if (spell.element === 'fire') {
+    sound.fire(spell.side, spell.power);
+    setTimeout(() => sound.fireImpact(1 - spell.side, spell.damage ?? 16), 700);
+  } else if (spell.element === 'lightning') {
+    sound.lightning(1 - spell.side);
+  } else {
+    sound.shieldUp(spell.side);
+  }
+}
+
 function unflatten(points) {
   const pose = [];
   for (let i = 0; i < points.length; i += 2) pose.push({ x: points[i], y: points[i + 1] });
@@ -384,6 +466,7 @@ function replayView(t) {
     caster.label = { text: spell.outcome === 'cheat' ? 'BACKFIRE' : `${spell.name} · ${spell.power}`, until: t + 2200 };
     const type = spell.outcome === 'cheat' ? 'backfire' : { fire: 'fireball', lightning: 'bolt', shield: 'shieldUp' }[spell.element];
     replay.effects.push({ type, from: spell.side, to: 1 - spell.side, side: spell.side, power: spell.power, start: t, duration: 700 });
+    replaySound(spell);
     replay.nextSpell += 1;
   }
   replay.effects = replay.effects.filter((effect) => t - effect.start < effect.duration);
@@ -414,6 +497,11 @@ function tick(t) {
     } else if (duel) {
       duel.update(t);
       recordFrames(t);
+      const secondsLeft = duel.timeLeft(t);
+      if (!duel.over && secondsLeft <= 10 && secondsLeft > 0 && secondsLeft !== lastTickSecond) {
+        lastTickSecond = secondsLeft;
+        sound.tick();
+      }
       renderer.draw(
         {
           camera: mode === 'camera' && Boolean(vision?.running),
@@ -438,9 +526,41 @@ function tick(t) {
 // The incantation boxes never submit the page, even if Enter lands at the wrong moment.
 document.querySelectorAll('.say').forEach((form) => form.addEventListener('submit', (event) => event.preventDefault()));
 
+// ---------- Sound settings ----------
+
+function syncSoundControls() {
+  $('#music-on').checked = sound.prefs.music;
+  $('#effects-on').checked = sound.prefs.effects;
+  $('#mute').textContent = sound.muted ? '🔇 Sound off (M)' : '🔊 Sound on (M)';
+  $('#mute').setAttribute('aria-pressed', String(sound.muted));
+}
+
+$('#music-on').addEventListener('change', (event) => {
+  sound.unlock();
+  sound.setMusic(event.target.checked);
+  syncSoundControls();
+});
+$('#effects-on').addEventListener('change', (event) => {
+  sound.unlock();
+  sound.setEffects(event.target.checked);
+  syncSoundControls();
+});
+$('#mute').addEventListener('click', () => {
+  sound.unlock();
+  sound.toggleMute();
+  syncSoundControls();
+});
+
 document.addEventListener('keydown', (event) => {
   const typing = event.target instanceof HTMLInputElement && !event.target.closest('form')?.hidden;
-  if (typing || !duel || screens.duel.hidden) return;
+  if (typing || screens.duel.hidden) return;
+  if (event.key === 'm' || event.key === 'M') {
+    sound.unlock();
+    sound.toggleMute();
+    syncSoundControls();
+    return;
+  }
+  if (!duel) return;
   const binding = KEYS[event.key];
   if (!binding) return;
   event.preventDefault();
@@ -456,12 +576,23 @@ function lobbyPlayers() {
   );
 }
 
-$('#start').addEventListener('click', () => startDuel(lobbyPlayers()));
-$('#rematch').addEventListener('click', () => lastMatch && startDuel(lastMatch.players));
-$('#replay').addEventListener('click', startReplay);
+// sound.unlock() runs inside each click, because browsers only allow sound after one.
+$('#start').addEventListener('click', () => {
+  sound.unlock();
+  startDuel(lobbyPlayers());
+});
+$('#rematch').addEventListener('click', () => {
+  sound.unlock();
+  if (lastMatch) startDuel(lastMatch.players);
+});
+$('#replay').addEventListener('click', () => {
+  sound.unlock();
+  startReplay();
+});
 $('#back').addEventListener('click', () => {
   duel = null;
   replay = null;
+  sound.stopMusic();
   renderSlots();
   show('title');
   loadStats();
@@ -477,10 +608,11 @@ async function boot() {
   if (!navigator.mediaDevices?.getUserMedia) document.querySelector('input[value="keyboard"]').checked = true;
   renderSlots();
   renderSponsors();
+  syncSoundControls();
   loadStats();
   requestAnimationFrame(tick);
 }
 
 // Exposed for quick checks in the browser console.
-window.hexbyte = { GESTURE_ELEMENTS, get duel() { return duel; } };
+window.hexbyte = { GESTURE_ELEMENTS, sound, get duel() { return duel; } };
 boot();

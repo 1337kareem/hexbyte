@@ -29,6 +29,11 @@
             <label><input type="radio" name="mode" value="camera" checked /> Camera (gestures + voice)</label>
             <label><input type="radio" name="mode" value="keyboard" /> Keyboard (typed incantations)</label>
           </fieldset>
+          <fieldset class="mode">
+            <legend>Sound</legend>
+            <label><input type="checkbox" id="music-on" checked /> Music</label>
+            <label><input type="checkbox" id="effects-on" checked /> Sound effects</label>
+          </fieldset>
           <button id="start" class="primary">Start the duel</button>
         </div>
 
@@ -51,6 +56,7 @@
         <div class="stage">
           <video id="video" playsinline muted></video>
           <canvas id="canvas" aria-label="Duel arena"></canvas>
+          <button id="mute" class="mute small" aria-pressed="false">🔊 Sound on (M)</button>
           <form class="say" data-side="0" hidden>
             <label for="say-0">Player 1, type your incantation</label>
             <input id="say-0" autocomplete="off" maxlength="160" />

@@ -23,12 +23,15 @@ const now = () => performance.now();
 export class Duel {
   // listen(side, element) resolves to the spoken or typed words, or null.
   // cast(body) sends the spell to the server and resolves to its reply.
-  constructor({ match, listen, cast, onLog, onEnd }) {
+  // onEvent(name, details) hears every moment worth a sound: listening, channel,
+  // cast, hit, backfire, outOfMana, fizzle and end.
+  constructor({ match, listen, cast, onLog, onEnd, onEvent = () => {} }) {
     this.matchId = match.matchId;
     this.listen = listen;
     this.cast = cast;
     this.onLog = onLog;
     this.onEnd = onEnd;
+    this.onEvent = onEvent;
     this.players = match.players.map((player) => ({
       ...player,
       hp: MAX_HP,
@@ -62,12 +65,18 @@ export class Duel {
     player.status = 'listening';
     player.element = element;
     player.words = '';
+    this.onEvent('listening', { side, element });
     const heard = await this.listen(side, element);
-    if (this.over) return;
+    if (this.over) {
+      this.onEvent('listened', { side });
+      return;
+    }
     player.auto = !heard;
     player.words = heard || pickFallback(element);
     player.status = 'channeling';
     player.channelStart = now();
+    this.onEvent('listened', { side });
+    this.onEvent('channel', { side, element });
 
     this.pending += 1;
     let reply;
@@ -91,12 +100,13 @@ export class Duel {
       player.manaLeft -= 1;
       player.label = { text: `${reply.name} · ${reply.power}`, until: t + 2600 };
       if (!this.over) {
+        this.onEvent('cast', { side, element: reply.element, power: reply.power });
         if (reply.element === 'fire') {
           this.effects.push({ type: 'fireball', from: side, to: target, power: reply.power, start: t, duration: FIRE_FLIGHT_MS });
-          this.at(t + FIRE_FLIGHT_MS, () => this.hit(target, reply.damage, reply.pierce));
+          this.at(t + FIRE_FLIGHT_MS, () => this.hit(target, reply.damage, reply.pierce, 'fire'));
         } else if (reply.element === 'lightning') {
           this.effects.push({ type: 'bolt', to: target, start: t, duration: 450 });
-          this.at(t + BOLT_DELAY_MS, () => this.hit(target, reply.damage, reply.pierce));
+          this.at(t + BOLT_DELAY_MS, () => this.hit(target, reply.damage, reply.pierce, 'lightning'));
         } else if (reply.element === 'shield') {
           player.shield = addShield(player.shield, reply.shield);
           player.shieldUntil = t + SHIELD_MS;
@@ -110,11 +120,14 @@ export class Duel {
       this.effects.push({ type: 'backfire', side, start: t, duration: 700 });
       this.floaters.push({ side, text: `-${BACKFIRE_DAMAGE}`, color: '#f87171', start: t });
       this.banner('BACKFIRE!', 'Prune caught a cheating incantation', '#f87171');
+      this.onEvent('backfire', { side, hp: player.hp });
     } else if (reply.outcome === 'out_of_mana') {
       player.manaLeft = 0;
       this.banner('OUT OF MANA', `Prune stopped ${player.name}'s spell`, '#fbbf24');
+      this.onEvent('outOfMana', { side });
     } else {
       this.banner('FIZZLE', reply.error ?? reply.blockedBy ?? 'The spell failed', '#a1a1aa', 1800);
+      this.onEvent('fizzle', { side });
     }
 
     if (player.manaLeft <= 0) {
@@ -127,7 +140,7 @@ export class Duel {
     }
   }
 
-  hit(side, damage, pierce) {
+  hit(side, damage, pierce, element) {
     if (this.over) return;
     const player = this.players[side];
     const result = applyHit(player, damage, pierce);
@@ -136,6 +149,7 @@ export class Duel {
     const t = now();
     if (result.dealt > 0) this.floaters.push({ side, text: `-${result.dealt}`, color: '#fca5a5', start: t });
     if (result.absorbed > 0) this.floaters.push({ side, text: `${result.absorbed} blocked`, color: '#93c5fd', start: t + 150 });
+    this.onEvent('hit', { side, element, dealt: result.dealt, absorbed: result.absorbed, hp: player.hp });
   }
 
   at(time, run) {
@@ -176,6 +190,7 @@ export class Duel {
     this.winner = left.hp <= 0 && right.hp <= 0 ? -1 : left.hp <= 0 ? 1 : right.hp <= 0 ? 0 : decideWinner(this.players);
     const detail = this.winner === -1 ? 'A draw' : `${this.players[this.winner].name} wins`;
     this.banner(reason, detail, '#fde68a', END_DELAY_MS + 400);
+    this.onEvent('end', { winner: this.winner, knockout: reason === 'KO!' });
     setTimeout(() => this.onEnd(this.result()), END_DELAY_MS);
   }
 

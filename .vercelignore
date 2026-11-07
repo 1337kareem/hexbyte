@@ -1,0 +1,15 @@
+# Never upload secrets. Vercel gets keys from the project's Environment Variables.
+.env
+.env.*
+!.env.example
+
+# Rebuilt or re-downloaded on Vercel during the build.
+node_modules
+dist
+public/models
+public/mediapipe
+
+# Local only.
+server/data
+.claude
+.DS_Store

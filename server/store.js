@@ -46,7 +46,7 @@ function summarize(spells, matchCount) {
   };
 }
 
-export async function createFileStore(dir = join(import.meta.dirname, 'data')) {
+export async function createFileStore(dir = join(import.meta.dirname, 'data'), kind = 'local file') {
   await mkdir(join(dir, 'frames'), { recursive: true });
   const spellsFile = join(dir, 'spells.jsonl');
   const matchesFile = join(dir, 'matches.jsonl');
@@ -70,7 +70,7 @@ export async function createFileStore(dir = join(import.meta.dirname, 'data')) {
   const framesFile = (matchId) => join(dir, 'frames', `${matchId.replace(/[^\w-]/g, '')}.jsonl`);
 
   return {
-    kind: 'local file',
+    kind,
     async addMatch(match) {
       matchIds.add(match.id);
       await appendFile(matchesFile, `${JSON.stringify({ event: 'start', ...match })}\n`);
@@ -94,7 +94,7 @@ export async function createFileStore(dir = join(import.meta.dirname, 'data')) {
       };
     },
     async stats() {
-      return { source: 'local file', ...summarize(spells, matchIds.size) };
+      return { source: kind, ...summarize(spells, matchIds.size) };
     },
     async getRune(sub) {
       return runes[sub] ?? [];
@@ -321,5 +321,9 @@ export async function createStore(connectionString) {
       console.warn(`Tiger Data is unavailable, so duels will save locally: ${error.message}`);
     }
   }
+  if (process.env.HEXBYTE_DATA_DIR) return createFileStore(process.env.HEXBYTE_DATA_DIR);
+  // On Vercel only /tmp is writable, and it is wiped whenever a server copy shuts down.
+  // Add DATABASE_URL (Tiger Data) to keep stats and replays there.
+  if (process.env.VERCEL) return createFileStore('/tmp/hexbyte', 'temporary storage');
   return createFileStore();
 }

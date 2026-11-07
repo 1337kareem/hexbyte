@@ -313,6 +313,14 @@ kbd {
   color: var(--muted);
 }
 
+.mute {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 10, 35, 0.7);
+}
+
 .stage-status {
   position: absolute;
   left: 50%;
