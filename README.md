@@ -42,20 +42,17 @@ and spells from storage.
 
 ## Sound
 
-All music and sound effects are generated live in the browser (`src/audio.js`), so
-there are no audio files to download or license.
+Sound effects are generated live in the browser (`src/audio.js`), so there are no
+audio files to download or license. There is no background music. (`src/audio.js`
+still contains an unused music loop; `sound.startMusic()` would turn it back on.)
 
-- **Music:** a quiet, original loop in D minor with a harp-like arpeggio, a heartbeat
-  drum and a soft son clave woodblock. It gets busier as spells fly, adds a double
-  heartbeat when a wizard drops to 30 HP or less, and calms down after the duel.
 - **Effects:** a channeling shimmer, a fireball whoosh that travels across the
   speakers, a boom when it lands, a lightning crackle with rolling thunder, a shield
   chime, a clang when a shield blocks, a thud for damage, a sad "wah-wah" for a
   backfire, a fizzle when mana runs out, a clock tick in the last 10 seconds, and a
   gong and fanfare at the end. Each sound plays from the side of its player.
-- The music dips while a player speaks, so the microphone hears the incantation.
-- Turn music and effects on or off in the lobby, or press `M` (or the button under
-  the timer) during a duel to mute everything. The choice is remembered.
+- Turn effects on or off in the lobby, or press `M` (or the button under the timer)
+  during a duel. The choice is remembered.
 
 ## Sponsor roles
 

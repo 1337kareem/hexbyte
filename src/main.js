@@ -209,7 +209,6 @@ async function startDuel(players) {
   listening = 0;
   lastTickSecond = null;
   sound.setTension(false);
-  sound.startMusic('duel');
   frames = [];
   clearInterval(flushTimer);
   flushTimer = setInterval(flushFrames, FLUSH_EVERY_MS);
@@ -528,36 +527,32 @@ document.querySelectorAll('.say').forEach((form) => form.addEventListener('submi
 
 // ---------- Sound settings ----------
 
+// There is no background music, only sound effects, so muting turns the effects off.
 function syncSoundControls() {
-  $('#music-on').checked = sound.prefs.music;
-  $('#effects-on').checked = sound.prefs.effects;
-  $('#mute').textContent = sound.muted ? '🔇 Sound off (M)' : '🔊 Sound on (M)';
-  $('#mute').setAttribute('aria-pressed', String(sound.muted));
+  const muted = !sound.prefs.effects;
+  $('#effects-on').checked = !muted;
+  $('#mute').textContent = muted ? '🔇 Sound off (M)' : '🔊 Sound on (M)';
+  $('#mute').setAttribute('aria-pressed', String(muted));
 }
 
-$('#music-on').addEventListener('change', (event) => {
+function toggleEffects() {
   sound.unlock();
-  sound.setMusic(event.target.checked);
+  sound.setEffects(!sound.prefs.effects);
   syncSoundControls();
-});
+}
+
 $('#effects-on').addEventListener('change', (event) => {
   sound.unlock();
   sound.setEffects(event.target.checked);
   syncSoundControls();
 });
-$('#mute').addEventListener('click', () => {
-  sound.unlock();
-  sound.toggleMute();
-  syncSoundControls();
-});
+$('#mute').addEventListener('click', toggleEffects);
 
 document.addEventListener('keydown', (event) => {
   const typing = event.target instanceof HTMLInputElement && !event.target.closest('form')?.hidden;
   if (typing || screens.duel.hidden) return;
   if (event.key === 'm' || event.key === 'M') {
-    sound.unlock();
-    sound.toggleMute();
-    syncSoundControls();
+    toggleEffects();
     return;
   }
   if (!duel) return;
