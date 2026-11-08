@@ -108,11 +108,12 @@ export function clampPower(power) {
 export function spellEffect(element, power) {
   const p = clampPower(power);
   const none = { damage: 0, shield: 0, pierce: 0, heal: 0, freezeMs: 0 };
-  if (element === 'fire') return { ...none, damage: 6 + 2 * p };
-  if (element === 'lightning') return { ...none, damage: 4 + 2 * p, pierce: 0.5 };
+  // Creativity is the damage: power 1 ("Fire.") does a fraction of what power 10 does.
+  if (element === 'fire') return { ...none, damage: 2 + 3 * p };
+  if (element === 'lightning') return { ...none, damage: 1 + 3 * p, pierce: 0.5 };
   if (element === 'shield') return { ...none, shield: 8 + 3 * p };
   // Frost Shard: weaker hit, but it freezes the target. A shield that soaks all of it stops the freeze.
-  if (element === 'frost') return { ...none, damage: Math.round(3 + 1.5 * p), freezeMs: FREEZE_BASE_MS + FREEZE_PER_POWER_MS * p };
+  if (element === 'frost') return { ...none, damage: 1 + 2 * p, freezeMs: FREEZE_BASE_MS + FREEZE_PER_POWER_MS * p };
   return none;
 }
 

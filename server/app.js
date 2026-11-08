@@ -10,6 +10,7 @@ import express from 'express';
 import { SignJWT, jwtVerify } from 'jose';
 import { auth0Config, checkRitual, gateStatus, hasRitualGate, readWizard } from './auth.js';
 import { castSpell, hasPrune, pruneModel, scoreSpell, setCustomerBudget, verifyReceipt } from './prune.js';
+import { looksLikeCheat } from './cheats.js';
 import {
   CLUSTER,
   accountUrl,
@@ -305,10 +306,14 @@ export async function createApp() {
     const latencyMs = Date.now() - started;
     let reply;
 
-    if (result.blockedBy) {
+    // Three cheat checks: Prune's injection shield, then the AI judge's own flag, then
+    // HexByte's patterns. Any one of them makes the spell backfire on its caster.
+    const caughtBy = result.blockedBy === 'prompt_injection' ? 'prune' : result.spell?.cheat === true ? 'judge' : looksLikeCheat(words) ? 'rules' : null;
+    if (caughtBy) {
+      reply = { outcome: 'cheat', caughtBy, blockedBy: result.blockedBy ?? null, element, words, latencyMs };
+    } else if (result.blockedBy) {
       const outOfMana = ['agent_step_budget', 'run_budget'].includes(result.blockedBy);
-      const outcome = result.blockedBy === 'prompt_injection' ? 'cheat' : outOfMana ? 'out_of_mana' : 'blocked';
-      reply = { outcome, blockedBy: result.blockedBy, element, words, latencyMs, error: BLOCK_REASONS[result.blockedBy] };
+      reply = { outcome: outOfMana ? 'out_of_mana' : 'blocked', blockedBy: result.blockedBy, element, words, latencyMs, error: BLOCK_REASONS[result.blockedBy] };
     } else {
       // An AI opponent's spell is judged like anyone's, then kept inside its rank's range.
       // The judge scores creativity out of 100; a tenth of it is the spell's power.
@@ -418,6 +423,8 @@ export async function createApp() {
       h: n(stats[side]?.hits, 999),
       b: n(stats[side]?.blocks, 999),
       dmg: n(stats[side]?.damage, 9999),
+      // Cheats caught: each one backfired.
+      x: n(stats[side]?.cheats, 99),
       hp: n(finalHp[side], 100),
       pl: levels[side],
     }));

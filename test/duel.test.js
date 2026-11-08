@@ -204,7 +204,7 @@ test('each player gets a scorecard: thrown, hits, blocks, damage, and the judge 
   throwAt(duel, 0.52);
   fly(duel);
   const { players, ratings } = duel.result();
-  assert.deepEqual(players[0].stats, { thrown: 2, hits: 1, blocks: 0, damage: 100 - duel.players[1].hp });
+  assert.deepEqual(players[0].stats, { thrown: 2, hits: 1, blocks: 0, damage: 100 - duel.players[1].hp, cheats: 0 });
   assert.equal(players[1].stats.blocks, 1, 'the second throw hit the shield');
   assert.deepEqual(ratings, ['signed-7']);
 });
@@ -250,7 +250,7 @@ test('the judge grows an orb still in hand, and adds a bonus to a hit that alrea
   assert.equal(early.duel.players[0].orb.power, 9);
   throwAt(early.duel, 0.52);
   fly(early.duel);
-  assert.equal(early.duel.players[1].hp, 76, 'power 9 fire: 24 to the torso');
+  assert.equal(early.duel.players[1].hp, 71, 'power 9 fire: 29 to the torso');
 
   let answer;
   const late = makeDuel([new Promise((resolve) => (answer = resolve))]);
@@ -260,7 +260,7 @@ test('the judge grows an orb still in hand, and adds a bonus to a hit that alrea
   assert.equal(late.duel.players[1].hp, 79, 'base headshot');
   answer({ outcome: 'cast', element: 'fire', power: 9, name: 'Blaze', bonus: judgeBonus('fire', 9) });
   await thrown.judged;
-  assert.equal(late.duel.players[1].hp, 64, 'the 10 bonus lands on the head too: +15');
+  assert.equal(late.duel.players[1].hp, 56, 'the 15 bonus lands on the head too: +23');
 });
 
 test('a missed throw earns no bonus, and an orb is never thrown on its own', async () => {
@@ -281,13 +281,53 @@ test('a missed throw earns no bonus, and an orb is never thrown on its own', asy
   assert.equal(slow.duel.projectiles.length, 0);
 });
 
-test('a cheat crumbles the orb and backfires', async () => {
-  const { duel, names } = makeDuel([{ outcome: 'cheat', element: 'fire', blockedBy: 'prompt_injection' }]);
+test('a cheat backfires: the spell hits its caster at full power, past any shield', async () => {
+  for (const [gesture, element, damage] of [
+    ['Closed_Fist', 'fire', 32],
+    ['Victory', 'lightning', 31],
+    ['Thumb_Up', 'frost', 21],
+  ]) {
+    const { duel, names } = makeDuel([{ outcome: 'cheat', element, caughtBy: 'rules' }]);
+    duel.raiseShield(0, performance.now());
+    const fired = await duel.fire(0, gesture);
+    await fired.judged;
+    assert.equal(duel.players[0].orb, null, 'the orb is gone');
+    assert.equal(duel.players[0].hp, 100 - damage, `${element}: ${damage} to the cheater`);
+    assert.equal(duel.players[1].hp, 100, 'nothing to the opponent');
+    assert.equal(duel.players[0].stats.cheats, 1);
+    assert.ok(names().includes('backfire'));
+    if (element === 'frost') assert.ok(duel.isFrozen(0), 'a frost cheat freezes the cheater');
+  }
+});
+
+test('a cheat that already hit is given back to the opponent', async () => {
+  let answer;
+  const { duel } = makeDuel([new Promise((resolve) => (answer = resolve))]);
   const fired = await duel.fire(0, 'Closed_Fist');
+  throwAt(duel, 0.52);
+  fly(duel);
+  assert.equal(duel.players[1].hp, 86, 'it hit at base power first');
+  answer({ outcome: 'cheat', element: 'fire', caughtBy: 'prune' });
   await fired.judged;
-  assert.equal(duel.players[0].orb, null);
-  assert.equal(duel.players[0].hp, 88);
-  assert.ok(names().includes('backfire'));
+  assert.equal(duel.players[1].hp, 100, 'the damage is given back');
+  assert.equal(duel.players[0].hp, 68, 'and the cheater takes 32');
+});
+
+test('saying nothing makes the weakest spell, with nothing to judge', async () => {
+  let judged = 0;
+  const { duel } = makeDuel();
+  duel.listen = async () => null;
+  duel.cast = () => {
+    judged += 1;
+    return new Promise(() => {});
+  };
+  await duel.fire(0, 'Closed_Fist');
+  assert.equal(duel.players[0].orb.power, 1);
+  assert.equal(duel.players[0].manaLeft, 5, 'no mana spent');
+  assert.equal(judged, 0);
+  throwAt(duel, 0.52);
+  fly(duel);
+  assert.equal(duel.players[1].hp, 95, 'fire at power 1: 5 damage');
 });
 
 test('a frost hit freezes, and there is no life drain any more', async () => {
@@ -355,9 +395,9 @@ test('damage follows creativity: a hit waits for the score, then lands at the ju
   };
   const lazy = await hitWith(1);
   const creative = await hitWith(9);
-  assert.equal(lazy, 8, '"Fire." hits for 8');
-  assert.equal(creative, 24, 'a creative line hits for 24');
-  assert.ok(creative > 2 * lazy, 'creativity is the damage');
+  assert.equal(lazy, 5, '"Fire." hits for 5');
+  assert.equal(creative, 29, 'a creative line hits for 29');
+  assert.ok(creative > 5 * lazy, 'creativity is the damage');
 });
 
 test('a lazy incantation shrinks an orb still in hand, a creative one grows it', async () => {

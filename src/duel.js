@@ -15,7 +15,6 @@
 
 import {
   ATTACKS,
-  BACKFIRE_DAMAGE,
   BASE_POWER,
   GESTURE_ELEMENTS,
   MATCH_SECONDS,
@@ -24,7 +23,6 @@ import {
   SHIELD_UP_MS,
   applyHit,
   decideWinner,
-  pickFallback,
   spellEffect,
 } from '../shared/rules.js';
 import { ZONE_MULTIPLIERS, dodgePose, hitZone, standingPose, zonePoint } from './pose.js';
@@ -41,8 +39,9 @@ export const STRIKE_DELAY_MS = 450;
 // A bolt hits a little wider than an orb.
 const STRIKE_SPLASH = 0.03;
 // A hit that lands before the judge's creativity score waits this long for it, so the
-// damage matches how creative the spell was. After that it deals base damage.
-export const JUDGE_WAIT_MS = 3000;
+// damage matches how creative the spell was. The AI judge can take 5 to 15 seconds
+// when it's busy, so this is long. After that it deals base damage.
+export const JUDGE_WAIT_MS = 15000;
 // Keyboard and AI dodges. A new one can start as soon as the last one ends.
 const JUMP_MS = 650;
 const DUCK_MS = 700;
@@ -105,7 +104,7 @@ export class Duel {
       // Spells whose verdict hasn't come back yet.
       judging: 0,
       // For the end-of-duel scorecard (and the Duel Ledger).
-      stats: { thrown: 0, hits: 0, blocks: 0, damage: 0 },
+      stats: { thrown: 0, hits: 0, blocks: 0, damage: 0, cheats: 0 },
     }));
     this.casts = new Map();
     // The judge's signed ratings, handed back at the end for the creativity scores.
@@ -175,22 +174,26 @@ export class Duel {
       this.onEvent('listened', { side });
     }
     if (this.over) return null;
+    // Listened, but heard no incantation: nothing to judge, so it's the weakest spell.
+    const silent = judging && !heard;
     player.auto = !heard;
-    player.words = heard || pickFallback(element);
+    player.words = heard || '…';
 
     // Mana is spent now, because the judge's call goes through Prune, which counts
     // it against the wizard's step limit.
     const t = now();
-    if (judging) player.manaLeft -= 1;
+    if (judging && !silent) player.manaLeft -= 1;
     const castId = (this.castCount += 1);
+    const startPower = silent ? 1 : BASE_POWER;
     // judging: the creativity score is on its way, and it sets this spell's power.
-    const cast = { castId, side, element, power: BASE_POWER, effect: spellEffect(element, BASE_POWER), state: 'held', judging };
+    const cast = { castId, side, element, power: startPower, effect: spellEffect(element, startPower), state: 'held', judging: judging && !silent, dealt: 0 };
     this.casts.set(castId, cast);
-    player.orb = { castId, element, power: BASE_POWER, at: null, aim: null, hand: null };
+    player.orb = { castId, element, power: startPower, at: null, aim: null, hand: null };
     player.status = 'armed';
     this.onEvent('armed', { side, element });
-    if (!judging) {
+    if (!judging || silent) {
       cast.unjudged = true;
+      if (silent) this.floaters.push({ side, text: 'No incantation: weak spell', color: MUTED, start: t });
       return { judged: Promise.resolve(), castId };
     }
 
@@ -324,6 +327,8 @@ export class Duel {
         }
         const text = power > BASE_POWER ? `${score}: power up!` : power < BASE_POWER ? `${score}: weak spell` : score;
         this.floaters.push({ side, text, color: power > BASE_POWER ? GOLD : MUTED, start: t });
+        // A really creative spell gets the whole arena's attention.
+        if (reply.creativity >= 80) this.banner('CREATIVE!', `${reply.name ?? 'Spell'} · creativity ${reply.creativity}`, GOLD, 1500);
         // It already hit and was waiting for this: the damage lands now, at the judged power.
         if (cast.pendingHit) this.applyHit(cast, t);
       } else if (cast.state === 'hit' && bonus.damage > 0) {
@@ -333,6 +338,7 @@ export class Duel {
         this.onEvent('cast', { side, element, power, bonus: true });
         const result = this.hit(cast.target, extra, 0, element, cast.zone);
         player.stats.damage += result?.dealt ?? 0;
+        cast.dealt += result?.dealt ?? 0;
         if (element === 'frost' && result?.dealt > 0) this.freeze(cast.target, bonus.freezeMs, { extend: true });
         this.onEvent('landed', { castId, side, target: cast.target, element, power, zone: cast.zone, damage: result?.dealt ?? 0, bonus: true });
       } else {
@@ -340,20 +346,42 @@ export class Duel {
         this.floaters.push({ side, text: `${power}/10${why}`, color: MUTED, start: t });
       }
     } else if (reply.outcome === 'cheat') {
-      // A cheater's orb crumbles in their hand (or in the air), and it backfires.
-      // A hit that was waiting for this verdict does nothing.
+      // Cheating backfires: the spell turns on the wizard who cast it, at full power and
+      // past any shield, and nothing it did to the opponent counts.
       cast.pendingHit = null;
+      if (cast.state === 'hit' && cast.dealt > 0) {
+        const foe = this.players[cast.target];
+        foe.hp = Math.min(MAX_HP, foe.hp + cast.dealt);
+        this.players[side].stats.damage = Math.max(0, this.players[side].stats.damage - cast.dealt);
+        this.floaters.push({ side: cast.target, text: `+${cast.dealt} given back`, color: '#86efac', start: t });
+      }
       this.destroyCast(castId, 'fizzled');
-      player.hp = Math.max(0, player.hp - BACKFIRE_DAMAGE);
+      cast.state = 'backfired';
+      const full = spellEffect(element, 10);
+      player.hp = Math.max(0, player.hp - full.damage);
+      if (element === 'frost') this.freeze(side, full.freezeMs);
+      player.stats.cheats += 1;
       this.effects.push({ type: 'backfire', side, start: t, duration: 700 });
-      this.floaters.push({ side, text: `-${BACKFIRE_DAMAGE}`, color: '#f87171', start: t });
-      this.banner('BACKFIRE!', 'Prune caught a cheating incantation', '#f87171');
-      this.onEvent('backfire', { side, hp: player.hp });
+      this.floaters.push({ side, text: `-${full.damage} BACKFIRE`, color: '#f87171', start: t });
+      const who = { prune: 'Prune blocked a prompt injection', judge: 'The AI judge caught a cheat', rules: 'HexByte caught a cheat' }[reply.caughtBy] ?? 'Caught cheating';
+      this.banner('BACKFIRE!', `${who}: your spell hit you`, '#f87171', 1800);
+      this.onEvent('backfire', { side, hp: player.hp, damage: full.damage });
     } else if (reply.outcome === 'out_of_mana') {
       if (cast.pendingHit) this.applyHit(cast, t);
       player.manaLeft = 0;
       this.banner('OUT OF MANA', `No more judging for ${player.name}: attacks fly at base power`, '#fbbf24');
       this.onEvent('outOfMana', { side });
+    } else if (reply.blockedBy === 'agent_loop') {
+      // The same incantation again: Prune's loop guard stopped it, so it's a weak spell.
+      cast.power = 1;
+      if (player.orb?.castId === castId) player.orb.power = 1;
+      const flying = this.projectiles.find((p) => p.castId === castId);
+      if (flying) {
+        flying.power = 1;
+        flying.radius = orbRadius(1);
+      }
+      if (cast.pendingHit) this.applyHit(cast, t);
+      this.floaters.push({ side, text: 'Say something new! Weak spell', color: MUTED, start: t });
     } else {
       // The orb is still real; it just stays at base power.
       if (cast.pendingHit) this.applyHit(cast, t);
@@ -376,7 +404,8 @@ export class Duel {
   }
 
   // Returns what the hit did, so a frost hit can follow up with its freeze.
-  hit(side, damage, pierce, element, zone = null) {
+  // tag: 'creative' or 'weak', shown with the damage so it's clear what creativity did.
+  hit(side, damage, pierce, element, zone = null, tag = null) {
     if (this.over) return null;
     const player = this.players[side];
     const result = applyHit(player, damage, pierce);
@@ -385,8 +414,9 @@ export class Duel {
     const t = now();
     if (result.dealt > 0) {
       const headshot = zone === 'head' && element !== 'lightning';
-      const text = headshot ? `HEADSHOT -${result.dealt}` : zone === 'limb' ? `-${result.dealt} limb` : `-${result.dealt}`;
-      this.floaters.push({ side, text, color: headshot ? GOLD : '#fca5a5', start: t });
+      const base = headshot ? `HEADSHOT -${result.dealt}` : zone === 'limb' ? `-${result.dealt} limb` : `-${result.dealt}`;
+      const text = tag === 'creative' ? `${base} CREATIVE!` : tag === 'weak' ? `${base} (weak)` : base;
+      this.floaters.push({ side, text, color: headshot || tag === 'creative' ? GOLD : '#fca5a5', start: t });
     }
     if (result.absorbed > 0) this.floaters.push({ side, text: `${result.absorbed} blocked`, color: '#93c5fd', start: t + 150 });
     this.onEvent('hit', { side, element, zone, dealt: result.dealt, absorbed: result.absorbed, hp: player.hp });
@@ -521,8 +551,10 @@ export class Duel {
     cast.pendingHit = null;
     const effect = spellEffect(cast.element, cast.power);
     const damage = Math.max(1, Math.round(effect.damage * cast.multiplier));
-    const result = this.hit(cast.target, damage, 0, cast.element, cast.zone);
+    const tag = cast.power >= 7 ? 'creative' : cast.power <= 3 ? 'weak' : null;
+    const result = this.hit(cast.target, damage, 0, cast.element, cast.zone, tag);
     this.players[cast.side].stats.damage += result?.dealt ?? 0;
+    cast.dealt = (cast.dealt ?? 0) + (result?.dealt ?? 0);
     if (cast.element === 'frost' && result?.dealt > 0) this.freeze(cast.target, effect.freezeMs);
     this.onEvent('landed', { castId: cast.castId, side: cast.side, target: cast.target, element: cast.element, power: cast.power, zone: cast.zone, damage: result?.dealt ?? 0 });
   }
@@ -559,7 +591,11 @@ export class Duel {
     let reason = null;
     // Attacks never run out, so a duel ends with a knockout or the clock.
     if (left.hp <= 0 || right.hp <= 0) reason = 'KO!';
-    else if (t >= this.endsAt) reason = 'TIME!';
+    else if (t >= this.endsAt) {
+      // Hits still waiting for their score land now, at the power they have, before the result.
+      for (const cast of this.casts.values()) if (cast.pendingHit) this.applyHit(cast, t);
+      reason = left.hp <= 0 || right.hp <= 0 ? 'KO!' : 'TIME!';
+    }
     if (!reason) return;
 
     this.over = true;
@@ -618,9 +654,10 @@ export function arcCovers(arc, point, aspect, pad = 0) {
   return point.y >= arc.cy + arc.r * low - pad && point.y <= arc.cy + arc.r * high + pad;
 }
 
-// Bigger power, bigger orb (and a bigger target to hit with).
+// Bigger power, bigger orb (and a bigger target to hit with): a creative orb is
+// about twice the size of a lazy one.
 export function orbRadius(power) {
-  return 0.028 + power * 0.0025;
+  return 0.022 + power * 0.005;
 }
 
 export { ATTACKS };

@@ -599,9 +599,9 @@ function listen(side, element) {
   // speech bubble while they say them.
   if (mode === 'camera') {
     if (!voiceAvailable) return Promise.resolve(null);
-    // A short wait for the first word, so attacks can come fast.
+    // Time to start talking: an incantation is what makes a spell strong.
     return listenOnce({
-      startMs: 1500,
+      startMs: 3000,
       onPartial: (text) => {
         const player = duel?.players[side];
         if (player?.status === 'listening') player.words = text;

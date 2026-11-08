@@ -12,15 +12,16 @@ test('power is always a whole number from 1 to 10, whatever the AI says', () => 
 
 test('each element does what the rules say', () => {
   const pick = ({ damage, shield, pierce, heal, freezeMs }) => ({ damage, shield, pierce, heal, freezeMs });
-  assert.deepEqual(pick(spellEffect('fire', 10)), { damage: 26, shield: 0, pierce: 0, heal: 0, freezeMs: 0 });
-  assert.deepEqual(pick(spellEffect('lightning', 1)), { damage: 6, shield: 0, pierce: 0.5, heal: 0, freezeMs: 0 });
+  assert.deepEqual(pick(spellEffect('fire', 10)), { damage: 32, shield: 0, pierce: 0, heal: 0, freezeMs: 0 });
+  assert.deepEqual(pick(spellEffect('fire', 1)), { damage: 5, shield: 0, pierce: 0, heal: 0, freezeMs: 0 });
+  assert.deepEqual(pick(spellEffect('lightning', 1)), { damage: 4, shield: 0, pierce: 0.5, heal: 0, freezeMs: 0 });
   assert.deepEqual(pick(spellEffect('shield', 5)), { damage: 0, shield: 23, pierce: 0, heal: 0, freezeMs: 0 });
   assert.deepEqual(spellEffect('fire', 9999), spellEffect('fire', 10));
 });
 
 test('frost freezes longer with power', () => {
-  assert.deepEqual([spellEffect('frost', 1).damage, spellEffect('frost', 1).freezeMs], [5, 2400]);
-  assert.deepEqual([spellEffect('frost', 10).damage, spellEffect('frost', 10).freezeMs], [18, 6000]);
+  assert.deepEqual([spellEffect('frost', 1).damage, spellEffect('frost', 1).freezeMs], [3, 2400]);
+  assert.deepEqual([spellEffect('frost', 10).damage, spellEffect('frost', 10).freezeMs], [21, 6000]);
 });
 
 test('there is no heal or life drain any more', () => {

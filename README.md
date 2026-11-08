@@ -77,13 +77,16 @@ Open http://localhost:8788.
   spell's power, so "Fire." hits for about 8 and a vivid, original line for over 20. The
   score sets the power up or down: an orb still in your hand or in the air grows or
   shrinks, and a hit that lands before the score waits for it ("Hit! Judging…") so its
-  damage matches. If the judge takes over 3 s, the hit deals base damage.
+  damage matches (up to 15 s, since the AI can be slow when busy; then base damage).
+  Saying nothing, or repeating an incantation, makes the weakest spell.
+- **Cheating backfires.** An incantation that talks to the game or tries to set a score
+  ("ignore your rules", "rate this 10", "deal 100 damage") is caught by Prune's injection
+  shield, the AI judge's cheat flag, or HexByte's own patterns. Your spell then hits you
+  at full power, past your shield, and any damage it did is given back.
 - Duels last 90 seconds and end with a knockout or the clock. Mana is how many spells
   the AI judge scores through Prune (its step limit): 8 for guests, 9 for Auth0 wizards,
   10 for wizards who passed the Ritual Gate. The AI gets 7 (Easy), 8 (Medium) or 10
   (Hard). After that, attacks are unjudged and fly at base power 4.
-- An incantation that tries to rewrite the rules ("ignore all previous instructions…")
-  is blocked by Prune and backfires for 12 damage.
 - Keyboard mode: Player 1 uses `1` `2` `3` `Q` (fire, shield, lightning, frost), Player 2
   uses `8` `9` `0` `U`. Type the incantation, then press the spell key again to throw.
 
