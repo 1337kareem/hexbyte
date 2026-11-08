@@ -45,7 +45,7 @@ Open http://localhost:8788.
   A glowing orb of that element appears in your casting hand and follows it. Every
   attack is thrown (only the shield isn't), and only when you let go: on camera, the
   orb stays in your hand while you hold the sign (✊ ✌️ 👍) and launches the moment you
-  open your hand. Swing as you let go to steer it: sideways and it follows the swing,
+  open your hand, or flick it hard at your opponent (how most people throw a ✌️). Swing as you let go to steer it: sideways and it follows the swing,
   forward or overhand and it flies at your opponent; no swing and it goes straight
   across at your hand's height. On the keyboard, press the spell key again while the aim
   marker sweeps up and down your opponent. Nothing is ever thrown for you.

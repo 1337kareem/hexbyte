@@ -17,7 +17,7 @@ import { zonePoint } from './pose.js';
 import { GAP, Ritual, STEPS, clampToSide, inView } from './ritual.js';
 import { ELEMENT_COLORS, ELEMENT_NAMES, icon } from './icons.js';
 import { Renderer } from './render.js';
-import { WRISTS, emptyTracks, gripStep, releaseDirection, swingOf, trackWrists } from './throws.js';
+import { FLICK_SPEED, WRISTS, emptyTracks, gripStep, releaseDirection, swingOf, trackWrists } from './throws.js';
 import { Vision } from './vision.js';
 import { listenOnce, voiceAvailable } from './voice.js';
 
@@ -1328,10 +1328,12 @@ function updateOrbs(t) {
     }
     orb.at = body[orb.hand];
     orb.aim = null;
-    const step = gripStep(orb, vision.sides[side]?.held?.gesture === GESTURE_OF[orb.element], t);
+    // A hard throwing flick of the orb's hand counts as letting go too (how a ✌️ is thrown).
+    const flick = swingOf(wristTracks[side], side, duel.aspect, FLICK_SPEED, [orb.hand]);
+    const step = gripStep(orb, vision.sides[side]?.held?.gesture === GESTURE_OF[orb.element], t, Boolean(flick));
     orb.prompt = step === 'waiting' ? `${ELEMENT_ICONS[orb.element]} then let go` : 'Let go to throw';
     if (step !== 'release') return;
-    const swing = swingOf(wristTracks[side], side, duel.aspect, undefined, [orb.hand]);
+    const swing = flick ?? swingOf(wristTracks[side], side, duel.aspect, undefined, [orb.hand]);
     duel.throwOrb(side, orb.at, releaseDirection(swing, orb.at, zonePoint(bodyFor(1 - side, t), 'torso'), duel.aspect));
     wristTracks[side] = emptyTracks();
   });

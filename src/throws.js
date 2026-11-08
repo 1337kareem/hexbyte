@@ -1,5 +1,7 @@
 // Camera throws. The orb stays in your hand while you hold the spell's hand sign
 // (✊ fire, ✌️ lightning, 👍 frost). It launches the moment you let go, and only then.
+// Letting go is either opening your hand (the sign ends) or flicking it hard at the
+// opponent, which is how most people throw a ✌️: the camera still sees the V.
 // The way your arm was moving when you let go steers it:
 // - swinging sideways at the opponent: it follows the swing;
 // - swinging forward at the screen or overhand: it flies at the opponent, a little
@@ -13,6 +15,11 @@ export const RELEASE_MS = 150;
 // THROW_WINDOW_MS counts as a swing that steers the throw.
 export const THROW_SPEED = 0.6;
 export const THROW_WINDOW_MS = 260;
+// A flick that counts as letting go: the orb's hand moving at least this fast. That's
+// half the frame's height in about a quarter second, so only a real throw does it.
+export const FLICK_SPEED = 1.8;
+// Right after the orb appears, the hand may still be moving into the sign: ignore flicks.
+export const FLICK_SETTLE_MS = 300;
 // MediaPipe pose wrists: left 15, right 16.
 export const WRISTS = [15, 16];
 
@@ -54,8 +61,11 @@ export function swingOf(tracks, side, aspect, minSpeed = THROW_SPEED, wrists = W
 // Where a swing sends the orb, as a direction in frame units. A sideways swing at the
 // opponent keeps its own angle; any other throw heads for the opponent's body.
 // One frame of an orb in a camera player's hand. holding: is the spell's hand sign
-// held right now? Returns 'release' only after a real let-go of a gripped orb.
-export function gripStep(orb, holding, t) {
+// held right now? flicked: did the orb's hand just make a hard throwing flick?
+// Returns 'release' only for a real let-go: never on its own, never on a flicker.
+export function gripStep(orb, holding, t, flicked = false) {
+  orb.since ??= t;
+  if (flicked && t - orb.since >= FLICK_SETTLE_MS) return 'release';
   if (holding) {
     orb.gripped = true;
     orb.letGoAt = null;

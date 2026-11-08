@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { RELEASE_MS, emptyTracks, gripStep, releaseDirection, swingOf, throwDirection, trackWrists } from '../src/throws.js';
+import { FLICK_SETTLE_MS, FLICK_SPEED, RELEASE_MS, emptyTracks, gripStep, releaseDirection, swingOf, throwDirection, trackWrists } from '../src/throws.js';
 
 const ASPECT = 16 / 9;
 // Player 1 (left side) moves one wrist from `from` to `to` over `ms`, sampled every 66 ms
@@ -71,4 +71,22 @@ test('an orb only launches when you let go: never on its own, never on a flicker
   gripStep(early, true, 4000);
   assert.equal(gripStep(early, false, 4033), 'held', 'just let go');
   assert.equal(gripStep(early, false, 4033 + RELEASE_MS), 'release', 'make the sign again, let go, and it flies');
+});
+
+test('a hard flick lets go too, even while the camera still sees the sign (how a ✌️ is thrown)', () => {
+  const orb = {};
+  assert.equal(gripStep(orb, true, 0), 'held');
+  assert.equal(gripStep(orb, true, 100, true), 'held', 'not in the first moment, while the hand moves into the sign');
+  assert.equal(gripStep(orb, true, FLICK_SETTLE_MS + 50, true), 'release', 'still a V, but flicked hard: it flies');
+  const waiting = {};
+  gripStep(waiting, false, 0);
+  assert.equal(gripStep(waiting, false, 1000, true), 'release', 'a flick throws an orb waiting in the hand');
+});
+
+test('only a hard flick counts: a normal swing while holding the sign keeps the orb', () => {
+  const peace = swing({ x: 0.3, y: 0.5 }, { x: 0.42, y: 0.46 }, 200, 16);
+  assert.ok(swingOf(peace, 0, ASPECT), 'a normal swing');
+  assert.equal(swingOf(peace, 0, ASPECT, FLICK_SPEED, [16]), null, 'is not a flick');
+  const flick = swing({ x: 0.28, y: 0.45 }, { x: 0.52, y: 0.5 }, 200, 16);
+  assert.ok(swingOf(flick, 0, ASPECT, FLICK_SPEED, [16]), 'a hard flick at the opponent is');
 });
