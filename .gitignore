@@ -7,3 +7,6 @@ public/mediapipe
 public/models
 server/data
 .vercel
+
+# Notes that name accounts: never in the repo.
+HANDOVER.md

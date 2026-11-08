@@ -1,0 +1,73 @@
+/* HexByte design tokens: "Arcade pixel", from the UI/UX Pro Max skill
+   (style: Pixel Art; palette: neon red + blue on dark, score green;
+   type: Press Start 2P headings, VT323 text). Every page imports this file.
+   Text colors are checked against --bg for 4.5:1 contrast or better. */
+:root {
+  color-scheme: dark;
+
+  --bg: #0f172a;
+  --bg-deep: #0a1020;
+  --card: #192134;
+  --card-raised: #222c44;
+  --muted: #1f1829;
+  --fg: #ffffff;
+  --fg-muted: #94a3b8; /* 6.9:1 on --bg */
+  --line: #334155;
+  --line-soft: rgba(255, 255, 255, 0.08);
+
+  /* Player 1 is red and stands on the left; Player 2 is blue on the right.
+     Fills use the base color; text uses the light variant (6.4:1 and 7:1). */
+  --p1: #dc2626;
+  --p1-text: #f87171;
+  --p1-deep: #450a0a;
+  --p2: #2563eb;
+  --p2-text: #60a5fa;
+  --p2-deep: #172554;
+
+  --accent: #22c55e; /* primary action: start, confirm */
+  --on-accent: #0f172a; /* 7.8:1 on --accent */
+  --gold: #facc15; /* highlights, focus ring, verified badges */
+  --danger: #dc2626;
+  --ink: #000000; /* pixel outlines and hard offset shadows */
+  --paper: #f8fafc; /* speech bubbles on the duel canvas */
+
+  --element-fire: #f97316;
+  --element-shield: #38bdf8;
+  --element-lightning: #facc15;
+  --element-frost: #bae6fd;
+  --element-drain: #a78bfa;
+  --element-heal: #4ade80;
+
+  --font-display: 'Press Start 2P', ui-monospace, monospace;
+  --font-body: 'VT323', ui-monospace, monospace;
+
+  /* VT323 is small for its size, so the body scale starts at 20px. */
+  --text-xs: 18px;
+  --text-sm: 20px;
+  --text-md: 24px;
+  --text-lg: 30px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Pixel borders: hard 4px edges and offset shadows, no blur, no gradients. */
+  --px: 4px;
+  --shadow-px: 4px 4px 0 0 #000;
+  --ring: 0 0 0 3px var(--bg), 0 0 0 6px var(--gold);
+
+  --ease-snap: steps(4, end);
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-med: 0ms;
+  }
+}

@@ -4,10 +4,12 @@
 import { FilesetResolver, GestureRecognizer, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { GESTURE_ELEMENTS } from '../shared/rules.js';
 
-const HOLD_MS = 600;
+// Short enough to feel instant, long enough that passing hands don't cast.
+const HOLD_MS = 450;
 const MIN_SCORE = 0.55;
 
-const mirror = (points) => points.map((p) => ({ x: 1 - p.x, y: p.y }));
+// v keeps MediaPipe's visibility score, so the safe zone can tell when a body part is off screen.
+const mirror = (points) => points.map((p) => ({ x: 1 - p.x, y: p.y, v: p.visibility ?? 1 }));
 const sideOf = (x) => (x < 0.5 ? 0 : 1);
 
 export class Vision {
@@ -18,6 +20,12 @@ export class Vision {
     this.frame = 0;
     this.lastVideoTime = -1;
     this.running = false;
+    // Against the AI there is one person on camera, so everything they do is Player 1's.
+    this.solo = false;
+  }
+
+  sideOf(x) {
+    return this.solo ? 0 : sideOf(x);
   }
 
   async start(onStatus = () => {}) {
@@ -65,7 +73,7 @@ export class Vision {
     for (const body of bodies) {
       const points = mirror(body);
       const chestX = (points[11].x + points[12].x) / 2;
-      found[sideOf(chestX)] ??= points;
+      found[this.sideOf(chestX)] ??= points;
     }
     found.forEach((points, side) => {
       this.sides[side].pose = points;
@@ -77,7 +85,7 @@ export class Vision {
     result.landmarks.forEach((landmarks, i) => {
       const points = mirror(landmarks);
       const top = result.gestures[i]?.[0];
-      hands[sideOf(points[0].x)].push({
+      hands[this.sideOf(points[0].x)].push({
         points,
         gesture: top?.categoryName ?? 'None',
         score: top?.score ?? 0,

@@ -13,3 +13,6 @@ public/mediapipe
 server/data
 .claude
 .DS_Store
+
+# Notes that name accounts.
+HANDOVER.md

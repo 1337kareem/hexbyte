@@ -48,9 +48,10 @@ function fadeTo(param, value, ctx, seconds = 0.08) {
 
 function loadPrefs() {
   try {
-    return { music: true, effects: true, ...JSON.parse(localStorage.getItem(PREFS_KEY)) };
+    // Music is an option you turn on; effects are on unless you turn them off.
+    return { music: false, effects: true, ...JSON.parse(localStorage.getItem(PREFS_KEY)) };
   } catch {
-    return { music: true, effects: true };
+    return { music: false, effects: true };
   }
 }
 
@@ -410,6 +411,64 @@ export class Sound {
     zap.frequency.exponentialRampToValueAtTime(150, t + 0.18);
     const thunder = this.panner(sidePan(side) * 0.3);
     this.noiseBurst(t + 0.12, 2, this.filterNode('lowpass', 250, 0.8, this.envelope(thunder, t + 0.12, 0.08, 1.4, 1.8)));
+  }
+
+  // Frost Shard: glassy pings that fall in pitch as the shard flies.
+  frost(side) {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime;
+    const out = this.panner(sidePan(side) * 0.5);
+    [96, 91, 88, 84].forEach((note, i) => {
+      const s = t + i * 0.05;
+      this.oscillator('sine', midi(note), s, s + 0.35, this.envelope(out, s, 0.002, 0.16, 0.3));
+      this.oscillator('triangle', midi(note) * 1.5, s, s + 0.2, this.envelope(out, s, 0.002, 0.05, 0.15));
+    });
+    this.noiseBurst(t, 0.3, this.filterNode('highpass', 5000, 0.7, this.envelope(out, t, 0.01, 0.25, 0.25)));
+  }
+
+  // The crackle of ice closing around a frozen wizard.
+  freeze(side) {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime;
+    const out = this.panner(sidePan(side));
+    const crackle = this.filterNode('bandpass', 3500, 2, out);
+    for (let i = 0; i < 7; i += 1) {
+      const s = t + i * 0.04 + Math.random() * 0.02;
+      this.noiseBurst(s, 0.05, this.envelope(crackle, s, 0.002, 0.6, 0.04));
+    }
+    this.oscillator('sine', midi(100), t + 0.25, t + 0.9, this.envelope(out, t + 0.25, 0.005, 0.08, 0.6));
+  }
+
+  // Life Drain: a low wobble that slides from the target over to the caster.
+  drain(side) {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime;
+    const out = this.panner(-sidePan(side) * 0.6);
+    out.pan.setValueAtTime(-sidePan(side) * 0.6, t);
+    out.pan.linearRampToValueAtTime(sidePan(side) * 0.6, t + 0.6);
+    const wobble = this.oscillator('sawtooth', 330, t, t + 0.7, this.filterNode('lowpass', 900, 4, this.envelope(out, t, 0.04, 0.16, 0.6)));
+    wobble.frequency.exponentialRampToValueAtTime(110, t + 0.65);
+    // A fast vibrato makes it sound like something being pulled away.
+    const lfo = this.ctx.createOscillator();
+    lfo.frequency.value = 14;
+    const depth = this.ctx.createGain();
+    depth.gain.value = 40;
+    lfo.connect(depth);
+    depth.connect(wobble.frequency);
+    lfo.start(t);
+    lfo.stop(t + 0.7);
+  }
+
+  // Heal: a rising, sparkling arpeggio.
+  heal(side) {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime;
+    const out = this.panner(sidePan(side));
+    [72, 76, 79, 84, 88].forEach((note, i) => {
+      const s = t + i * 0.07;
+      this.oscillator('sine', midi(note), s, s + 0.6, this.envelope(out, s, 0.005, 0.18, 0.5));
+      this.oscillator('sine', midi(note) * 2, s, s + 0.3, this.envelope(out, s, 0.005, 0.04, 0.25));
+    });
   }
 
   // A bright chime and a soft whoom as a shield goes up.

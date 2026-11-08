@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MAX_SHIELD, addShield, applyHit, clampPower, decideWinner, spellEffect } from '../shared/rules.js';
+import { GESTURE_ELEMENTS, MAX_SHIELD, addShield, applyHit, clampPower, decideWinner, spellEffect } from '../shared/rules.js';
 
 test('power is always a whole number from 1 to 10, whatever the AI says', () => {
   assert.equal(clampPower(9999), 10);
@@ -11,10 +11,23 @@ test('power is always a whole number from 1 to 10, whatever the AI says', () => 
 });
 
 test('each element does what the rules say', () => {
-  assert.deepEqual(spellEffect('fire', 10), { damage: 26, shield: 0, pierce: 0 });
-  assert.deepEqual(spellEffect('lightning', 1), { damage: 6, shield: 0, pierce: 0.5 });
-  assert.deepEqual(spellEffect('shield', 5), { damage: 0, shield: 23, pierce: 0 });
+  const pick = ({ damage, shield, pierce, heal, freezeMs }) => ({ damage, shield, pierce, heal, freezeMs });
+  assert.deepEqual(pick(spellEffect('fire', 10)), { damage: 26, shield: 0, pierce: 0, heal: 0, freezeMs: 0 });
+  assert.deepEqual(pick(spellEffect('lightning', 1)), { damage: 6, shield: 0, pierce: 0.5, heal: 0, freezeMs: 0 });
+  assert.deepEqual(pick(spellEffect('shield', 5)), { damage: 0, shield: 23, pierce: 0, heal: 0, freezeMs: 0 });
   assert.deepEqual(spellEffect('fire', 9999), spellEffect('fire', 10));
+});
+
+test('frost freezes longer with power', () => {
+  assert.deepEqual([spellEffect('frost', 1).damage, spellEffect('frost', 1).freezeMs], [5, 2400]);
+  assert.deepEqual([spellEffect('frost', 10).damage, spellEffect('frost', 10).freezeMs], [18, 6000]);
+});
+
+test('there is no heal or life drain any more', () => {
+  for (const gone of ['heal', 'drain']) {
+    assert.equal(Object.values(GESTURE_ELEMENTS).includes(gone), false);
+    assert.equal(spellEffect(gone, 10).damage, 0);
+  }
 });
 
 test('shields soak damage first', () => {

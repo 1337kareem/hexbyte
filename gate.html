@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/icon.svg" />
+    <title>Ritual Gate · HexByte</title>
+  </head>
+  <body>
+    <main class="gate">
+      <header class="gate-head">
+        <p class="gate-kicker">HexByte · Auth0</p>
+        <h1>Ritual Gate</h1>
+        <p id="gate-title" class="gate-title">Checking your sign-in…</p>
+      </header>
+
+      <div class="gate-grid">
+        <section class="gate-stage" aria-label="Camera">
+          <video id="gate-video" playsinline muted></video>
+          <canvas id="gate-canvas" aria-hidden="true"></canvas>
+          <div class="gate-reading" aria-hidden="true">
+            <span id="gate-reading-label">Camera off</span>
+            <span class="gate-hold"><span id="gate-hold-fill"></span></span>
+          </div>
+        </section>
+
+        <section class="gate-side">
+          <p id="gate-count" class="gate-kicker">Step 1 of 3</p>
+          <p id="gate-emoji" class="gate-emoji" aria-hidden="true"></p>
+          <h2 id="gate-step" class="gate-step">Get ready</h2>
+          <p id="gate-hint" class="gate-hint"></p>
+          <p id="gate-status" class="gate-status" role="status" aria-live="polite"></p>
+          <div class="gate-actions">
+            <button id="gate-test" type="button" class="px-button" hidden>Done (test mode)</button>
+          </div>
+        </section>
+      </div>
+
+      <ol id="gate-steps" class="gate-steps" aria-label="The three steps"></ol>
+    </main>
+    <script type="module" src="/src/gate.js"></script>
+  </body>
+</html>

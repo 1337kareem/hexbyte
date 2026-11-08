@@ -1,6 +1,7 @@
 // Checks each sponsor service with the settings in .env. It never prints a secret.
 import pg from 'pg';
 import { auth0Config } from '../server/auth.js';
+import { hasSolana, ledgerAddress, ledgerBalance, writeMemo } from '../server/solana.js';
 import { castSpell, hasPrune, verifyReceipt } from '../server/prune.js';
 
 const failures = [];
@@ -57,6 +58,20 @@ await check(
   'no DATABASE_URL in .env (duels save to server/data/)',
 );
 
+await check(
+  'Solana',
+  hasSolana(),
+  async () => {
+    const address = await ledgerAddress();
+    const balance = await ledgerBalance();
+    if (!balance) throw new Error(`Ledger key ${address} has no devnet SOL. Fund it at https://faucet.solana.com (Devnet).`);
+    const written = await writeMemo(`HexByte check {"t":${Date.now()}}`);
+    if (!written) throw new Error('Devnet did not accept a test memo (see the warning above).');
+    return `Duel Ledger key ${address} has ${balance} devnet SOL. Test memo: ${written.url}`;
+  },
+  'no SOLANA_SECRET_KEY in .env (the Duel Ledger is off)',
+);
+
 const auth0 = auth0Config();
 await check(
   'Auth0',
@@ -64,8 +79,8 @@ await check(
   async () => {
     const response = await fetch(`https://${auth0.domain}/.well-known/openid-configuration`);
     if (!response.ok) throw new Error(`${auth0.domain} returned ${response.status}. Check AUTH0_DOMAIN.`);
-    const rune = (process.env.RUNE_SECRET ?? '').length >= 32;
-    return `tenant ${auth0.domain} is reachable. Rune Gate secret ${rune ? 'is set' : 'is missing (needs 32+ characters)'}.`;
+    const gate = (process.env.GATE_SECRET ?? '').length >= 32;
+    return `tenant ${auth0.domain} is reachable. Ritual Gate secret ${gate ? 'is set' : 'is missing (needs 32+ characters)'}.`;
   },
   'no AUTH0_DOMAIN or AUTH0_CLIENT_ID in .env (players join as guests)',
 );

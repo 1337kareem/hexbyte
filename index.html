@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0f172a" />
     <link rel="icon" href="/icon.svg" />
     <title>HexByte</title>
   </head>
@@ -11,51 +12,111 @@
     <main id="app">
       <section id="title" class="screen">
         <header class="brand">
-          <h1>HexByte</h1>
-          <p>A wizard duel you cast with your hands. Every spell is judged by AI through Prune.</p>
+          <i data-icon="hat" data-size="56" class="brand-mark"></i>
+          <div>
+            <h1>HexByte</h1>
+            <p>A wizard duel you cast with your hands. Every spell is judged by AI through Prune.</p>
+          </div>
         </header>
 
         <p id="notice" class="notice" role="status"></p>
 
         <div class="lobby">
-          <article class="slot" data-side="0"></article>
-          <div class="versus">vs</div>
-          <article class="slot" data-side="1"></article>
+          <article class="slot" data-side="0" aria-label="Player 1, left side"></article>
+          <div class="versus" aria-hidden="true">VS</div>
+          <article class="slot" data-side="1" aria-label="Player 2, right side"></article>
         </div>
 
         <div class="start-row">
-          <fieldset class="mode">
+          <fieldset class="control-group">
             <legend>Controls</legend>
-            <label><input type="radio" name="mode" value="camera" checked /> Camera (gestures + voice)</label>
-            <label><input type="radio" name="mode" value="keyboard" /> Keyboard (typed incantations)</label>
+            <div class="segmented">
+              <label class="seg">
+                <input type="radio" name="mode" value="camera" checked />
+                <span>Camera</span>
+              </label>
+              <label class="seg">
+                <input type="radio" name="mode" value="keyboard" />
+                <span>Keyboard</span>
+              </label>
+            </div>
+            <p class="hint">Camera: gestures and voice. Keyboard: typed incantations.</p>
           </fieldset>
-          <fieldset class="mode">
+          <fieldset class="control-group">
             <legend>Sound</legend>
-            <label><input type="checkbox" id="effects-on" checked /> Sound effects</label>
+            <label class="switch">
+              <input type="checkbox" id="effects-on" role="switch" checked />
+              <span class="switch-track" aria-hidden="true"></span>
+              <span>Sound effects</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="music-on" role="switch" />
+              <span class="switch-track" aria-hidden="true"></span>
+              <span>Music</span>
+            </label>
           </fieldset>
-          <button id="start" class="primary">Start the duel</button>
+          <button id="start" class="btn-start">
+            <i data-icon="play" data-size="20"></i>
+            <span>Start duel</span>
+          </button>
         </div>
 
-        <section class="howto">
-          <h2>How to duel</h2>
-          <ol>
-            <li><b>Hold a gesture</b> for half a second: ✊ fire, ✋ shield, ✌️ lightning. Player 1 stands on the left.</li>
-            <li><b>Say an incantation.</b> The AI rates its creativity from 1 to 10, and power sets the damage.</li>
-            <li><b>Mana is limited.</b> Prune counts your spells and stops you when you run out.</li>
+        <section class="panel howto" aria-labelledby="howto-title">
+          <h2 id="howto-title">Spellbook</h2>
+          <ul class="moves">
+            <li class="move" data-element="fire">
+              <i data-icon="fire" data-size="36" data-color="fire"></i>
+              <div>
+                <b>Fire</b>
+                <span>✊ Make a fist. Attack: the biggest hit</span>
+              </div>
+              <span class="move-keys" aria-label="Keys: Player 1 presses 1, Player 2 presses 8"><kbd>1</kbd><kbd>8</kbd></span>
+            </li>
+            <li class="move" data-element="shield">
+              <i data-icon="shield" data-size="36" data-color="shield"></i>
+              <div>
+                <b>Shield</b>
+                <span>✋ Show an open palm. Defense: a shield arc you aim with your palm, up for 1.4 s, then a 4.5 s recharge</span>
+              </div>
+              <span class="move-keys" aria-label="Keys: Player 1 presses 2, Player 2 presses 9"><kbd>2</kbd><kbd>9</kbd></span>
+            </li>
+            <li class="move" data-element="lightning">
+              <i data-icon="lightning" data-size="36" data-color="lightning"></i>
+              <div>
+                <b>Lightning</b>
+                <span>✌️ Make a peace sign. Attack: throw it and a bolt strikes down from the sky where you aimed</span>
+              </div>
+              <span class="move-keys" aria-label="Keys: Player 1 presses 3, Player 2 presses 0"><kbd>3</kbd><kbd>0</kbd></span>
+            </li>
+            <li class="move" data-element="frost">
+              <i data-icon="frost" data-size="36" data-color="frost"></i>
+              <div>
+                <b>Frost Shard</b>
+                <span>👍 Thumbs up. Attack: hits and freezes them for a few seconds</span>
+              </div>
+              <span class="move-keys" aria-label="Keys: Player 1 presses Q, Player 2 presses U"><kbd>Q</kbd><kbd>U</kbd></span>
+            </li>
+          </ul>
+          <ol class="rules">
+            <li><b>Hold the gesture</b> for half a second and <b>say an incantation</b>. An orb appears in your hand. Player 1 stands on the left.</li>
+            <li><b>Throw it</b> by swinging your arm at your opponent (or press the spell key again). Headshots do 1.5×, arms and legs 0.75×.</li>
+            <li><b>Dodge:</b> jump over low throws, duck under high ones (keys A/S and J/K), or pop a shield.</li>
+            <li><b>The AI judge</b> rates your incantation from 1 to 10 a few seconds later. A creative one powers up your orb.</li>
+            <li><b>Spam attacks.</b> Throw and cast again as fast as you like. Mana is how many spells the AI judge scores through Prune; after that, attacks fly at base power. Only the shield has a cooldown.</li>
             <li><b>No cheating.</b> Incantations that try to rewrite the rules get blocked by Prune and backfire.</li>
           </ol>
-          <p class="keys">Keyboard: Player 1 uses <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, Player 2 uses <kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> (fire, shield, lightning).</p>
+          <p class="keys-note">Keyboard mode: Player 1 uses <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>Q</kbd> (jump <kbd>A</kbd>, duck <kbd>S</kbd>), Player 2 uses <kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> <kbd>U</kbd> (jump <kbd>J</kbd>, duck <kbd>K</kbd>). Press your spell key again to throw.</p>
         </section>
 
-        <section id="stats" class="stats" aria-live="polite"></section>
+        <section id="stats" class="panel stats" aria-live="polite"></section>
         <p id="sponsors" class="sponsors"></p>
       </section>
 
       <section id="duel" class="screen" hidden>
+        <div class="arena">
         <div class="stage">
           <video id="video" playsinline muted></video>
           <canvas id="canvas" aria-label="Duel arena"></canvas>
-          <button id="mute" class="mute small" aria-pressed="false">🔊 Sound on (M)</button>
           <form class="say" data-side="0" hidden>
             <label for="say-0">Player 1, type your incantation</label>
             <input id="say-0" autocomplete="off" maxlength="160" />
@@ -64,26 +125,83 @@
             <label for="say-1">Player 2, type your incantation</label>
             <input id="say-1" autocomplete="off" maxlength="160" />
           </form>
-          <p id="stage-status" class="stage-status"></p>
+          <p id="stage-status" class="stage-status" role="status"></p>
+          <!-- The opening ritual: three steps on camera before the duel can start. -->
+          <section id="ritual" class="ritual" aria-labelledby="ritual-title" hidden>
+            <p class="ritual-kicker">Summoning ritual · <span id="ritual-count">0/3</span></p>
+            <p id="ritual-emoji" class="ritual-emoji" aria-hidden="true"></p>
+            <h2 id="ritual-title" class="ritual-title"></h2>
+            <p id="ritual-hint" class="ritual-hint"></p>
+            <ul id="ritual-players" class="ritual-players" aria-live="polite"></ul>
+            <ol id="ritual-steps" class="ritual-steps"></ol>
+            <p id="ritual-where" class="ritual-where"></p>
+            <button id="ritual-skip" class="btn-small" type="button">Skip ritual</button>
+          </section>
+          <p id="countdown" class="countdown" aria-live="assertive" hidden></p>
         </div>
-        <aside class="log">
-          <h2>Combat log</h2>
+        <!-- Which hand sign does what, always in view during the duel. -->
+        <ul id="signs" class="signs" aria-label="Hand signs"></ul>
+        </div>
+        <aside class="log" aria-labelledby="log-title">
+          <div class="log-head">
+            <h2 id="log-title">Combat log</h2>
+            <button id="mute" class="btn-small" aria-pressed="false">Sound on (M)</button>
+          </div>
           <p class="log-help">Every spell has a receipt signed by Prune. Verify it, or tamper with it and watch it fail.</p>
+          <p id="ledger-status" class="ledger-status" hidden></p>
           <ol id="log"></ol>
         </aside>
       </section>
 
       <section id="results" class="screen" hidden>
+        <p class="results-kicker">Match over</p>
         <h1 id="winner"></h1>
         <div id="summary" class="summary"></div>
         <div class="actions">
-          <button id="replay" class="primary">Watch the instant replay</button>
+          <button id="replay" class="btn-start">Instant replay</button>
           <button id="rematch">Rematch</button>
-          <button id="back">Back to the lobby</button>
+          <button id="back">Back to lobby</button>
         </div>
-        <p id="results-note" class="notice"></p>
+        <p id="results-note" class="notice" role="status"></p>
+        <p id="results-chain" class="results-chain"></p>
       </section>
     </main>
+    <dialog id="face-scan" class="face-scan" aria-labelledby="face-title">
+      <header class="face-head">
+        <div>
+          <p class="face-kicker">Auth0 · Face login</p>
+          <h2 id="face-title">Face login</h2>
+        </div>
+        <button id="face-cancel" type="button" class="link">Cancel</button>
+      </header>
+      <div class="face-stage">
+        <video id="face-video" playsinline muted></video>
+        <canvas id="face-canvas" width="640" height="480" aria-label="Camera with the face scan"></canvas>
+        <div id="face-stamp" class="face-stamp" hidden></div>
+      </div>
+      <p id="face-status" class="face-status" role="status" aria-live="polite"></p>
+      <div id="face-confirm" class="face-confirm" hidden>
+        <p id="face-question" class="face-question"></p>
+        <div class="face-confirm-row">
+          <button id="face-yes" type="button" class="auth">Yes</button>
+          <button id="face-no" type="button">No</button>
+        </div>
+      </div>
+      <form id="face-name" class="face-name" hidden>
+        <label for="face-name-input">Your name</label>
+        <div class="face-name-row">
+          <input id="face-name-input" maxlength="40" autocomplete="off" placeholder="First name, or first and last" />
+          <button id="face-submit" type="submit" class="auth">Sign in</button>
+        </div>
+      </form>
+      <div class="face-actions">
+        <button id="face-say" type="button" class="btn-small" hidden>Say name again</button>
+        <button id="face-rename" type="button" class="btn-small" hidden>Change my name</button>
+        <button id="face-rescan" type="button" class="btn-small" hidden>Rescan face</button>
+      </div>
+      <p class="face-privacy">Only numbers describing your face are sent, never a photo. They're saved with your Auth0 account.</p>
+    </dialog>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

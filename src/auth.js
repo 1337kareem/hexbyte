@@ -20,13 +20,18 @@ function saveWizards(wizards) {
   sessionStorage.setItem(STORE_KEY, JSON.stringify(wizards));
 }
 
+// Face login hands over its own Auth0 ID token (see facescan.js).
+export function saveWizard(side, wizard) {
+  saveWizards({ ...savedWizards(), [side]: wizard });
+}
+
 export function forgetWizard(side) {
   const wizards = savedWizards();
   delete wizards[side];
   saveWizards(wizards);
 }
 
-// Returns an error message if the login was refused (for example, a wrong rune).
+// Returns an error message if the login was refused (for example, the ritual failed).
 export async function initAuth(config) {
   if (!config) return null;
   client = await createAuth0Client({
@@ -49,7 +54,9 @@ export async function initAuth(config) {
         idToken: claims.__raw,
         name: claims.name ?? claims.nickname ?? claims.email ?? 'Wizard',
         picture: claims.picture ?? null,
-        runeVerified: claims[`${CLAIMS}rune_verified`] === true,
+        ritualVerified: claims[`${CLAIMS}ritual_verified`] === true,
+        // The ledger's record of this login, and the player record saved on the account.
+        ...(await recordLogin(claims.__raw)),
       },
     });
     return null;
@@ -57,6 +64,22 @@ export async function initAuth(config) {
     return `Sign-in did not finish: ${error.message}`;
   } finally {
     window.history.replaceState({}, '', '/');
+  }
+}
+
+// Puts this sign-in on the Duel Ledger (a hash of the login and of who it signed in).
+async function recordLogin(idToken) {
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    if (!response.ok) return { login: null, power: null, record: null };
+    const { login = null, power = null, record = null } = await response.json();
+    return { login, power, record };
+  } catch {
+    return { login: null, power: null, record: null };
   }
 }
 

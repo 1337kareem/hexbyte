@@ -30,9 +30,10 @@ test('the local store saves duels, replays them and survives a restart', async (
     assert.equal(stats.topSpell.name, 'Blaze');
     assert.equal(stats.byElement.find((e) => e.element === 'fire').avgPower, 8);
 
-    await store.saveRune('auth0|ana', [[[1, 2]]]);
+    await store.saveGate('auth0|ana', { hash: 'abc' });
     const reopened = await createFileStore(dir);
-    assert.deepEqual(await reopened.getRune('auth0|ana'), [[[1, 2]]]);
+    assert.deepEqual(await reopened.getGate('auth0|ana'), { hash: 'abc' });
+    assert.equal(await reopened.getGate('auth0|nobody'), null);
     assert.equal((await reopened.stats()).spells, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });

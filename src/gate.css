@@ -1,0 +1,185 @@
+/* The Ritual Gate page. Base type, buttons and tokens come from styles.css. */
+
+.gate [hidden] {
+  display: none;
+}
+
+.gate {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4) var(--space-12);
+}
+
+.gate-head h1 {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: clamp(22px, 4vw, 36px);
+  color: var(--gold);
+  text-shadow: 4px 4px 0 var(--ink);
+}
+
+.gate-kicker {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.gate-title {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--text-md);
+  color: var(--fg);
+}
+
+.gate-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+/* ---------- Camera ---------- */
+
+.gate-stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-deep);
+  border: var(--px) solid var(--ink);
+  box-shadow: var(--shadow-px), inset 0 0 0 4px var(--card-raised);
+  overflow: hidden;
+}
+
+.gate-stage video {
+  display: none;
+}
+
+.gate-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.gate-reading {
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: var(--px) solid var(--ink);
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.gate-reading > span:first-child {
+  flex: none;
+  min-width: 13ch;
+}
+
+.gate-hold {
+  flex: 1;
+  height: 16px;
+  background: var(--card);
+  border: 2px solid var(--line);
+}
+
+.gate-hold span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--gold);
+}
+
+/* ---------- The current step ---------- */
+
+.gate-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  text-align: center;
+  background: var(--card);
+  border: var(--px) solid var(--ink);
+  box-shadow: var(--shadow-px);
+}
+
+.gate-emoji {
+  margin: 0;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: 72px;
+  line-height: 1.1;
+}
+
+.gate-step {
+  margin: 0;
+  font-size: 16px;
+  color: var(--gold);
+}
+
+.gate-hint {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.gate-status {
+  min-height: 2.6em;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.gate-status[data-tone='good'] {
+  color: var(--accent);
+}
+
+.gate-status[data-tone='bad'] {
+  color: var(--p1-text);
+}
+
+body[data-result='open'] .gate-side {
+  border-color: var(--accent);
+  box-shadow: 4px 4px 0 0 var(--accent);
+}
+
+/* ---------- The three steps ---------- */
+
+.gate-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.gate-steps li {
+  padding: var(--space-2) var(--space-3);
+  border: var(--px) solid var(--line);
+  background: var(--card);
+}
+
+.gate-steps li.now {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.gate-steps li.done {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .gate-grid {
+    grid-template-columns: 1fr;
+  }
+}

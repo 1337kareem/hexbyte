@@ -50,7 +50,7 @@ export async function createFileStore(dir = join(import.meta.dirname, 'data'), k
   await mkdir(join(dir, 'frames'), { recursive: true });
   const spellsFile = join(dir, 'spells.jsonl');
   const matchesFile = join(dir, 'matches.jsonl');
-  const runesFile = join(dir, 'runes.json');
+  const gatesFile = join(dir, 'gates.json');
   const readLines = async (file) => {
     try {
       return (await readFile(file, 'utf8')).split('\n').filter(Boolean).map((line) => JSON.parse(line));
@@ -61,9 +61,9 @@ export async function createFileStore(dir = join(import.meta.dirname, 'data'), k
   };
   const spells = await readLines(spellsFile);
   const matchIds = new Set((await readLines(matchesFile)).map((m) => m.id));
-  let runes = {};
+  let gates = {};
   try {
-    runes = JSON.parse(await readFile(runesFile, 'utf8'));
+    gates = JSON.parse(await readFile(gatesFile, 'utf8'));
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
@@ -96,12 +96,12 @@ export async function createFileStore(dir = join(import.meta.dirname, 'data'), k
     async stats() {
       return { source: kind, ...summarize(spells, matchIds.size) };
     },
-    async getRune(sub) {
-      return runes[sub] ?? [];
+    async getGate(sub) {
+      return gates[sub] ?? null;
     },
-    async saveRune(sub, samples) {
-      runes[sub] = samples;
-      await writeFile(runesFile, JSON.stringify(runes));
+    async saveGate(sub, gate) {
+      gates[sub] = { hash: gate.hash };
+      await writeFile(gatesFile, JSON.stringify(gates));
     },
   };
 }
@@ -154,9 +154,9 @@ async function createTigerStore(connectionString) {
       points REAL[] NOT NULL
     )`);
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS runes (
+    CREATE TABLE IF NOT EXISTS emote_gates (
       sub TEXT PRIMARY KEY,
-      samples JSONB NOT NULL,
+      secret_hash TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
 
@@ -298,15 +298,15 @@ async function createTigerStore(connectionString) {
       }
       return { source: 'Tiger Data', ...summary, compression };
     },
-    async getRune(sub) {
-      const { rows } = await pool.query(`SELECT samples FROM runes WHERE sub = $1`, [sub]);
-      return rows[0]?.samples ?? [];
+    async getGate(sub) {
+      const { rows } = await pool.query(`SELECT secret_hash FROM emote_gates WHERE sub = $1`, [sub]);
+      return rows[0] ? { hash: rows[0].secret_hash } : null;
     },
-    async saveRune(sub, samples) {
+    async saveGate(sub, gate) {
       await pool.query(
-        `INSERT INTO runes (sub, samples, updated_at) VALUES ($1, $2, now())
-         ON CONFLICT (sub) DO UPDATE SET samples = EXCLUDED.samples, updated_at = now()`,
-        [sub, JSON.stringify(samples)],
+        `INSERT INTO emote_gates (sub, secret_hash, updated_at) VALUES ($1, $2, now())
+         ON CONFLICT (sub) DO UPDATE SET secret_hash = EXCLUDED.secret_hash, updated_at = now()`,
+        [sub, gate.hash],
       );
     },
   };
