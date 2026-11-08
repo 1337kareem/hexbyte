@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Duel, HOLD_LIMIT_MS, arcCrossing } from '../src/duel.js';
+import { Duel, arcCrossing } from '../src/duel.js';
 import { judgeBonus } from '../shared/rules.js';
 
 // A duel where each cast gets the next reply in the queue (a value or a promise).
@@ -261,7 +261,7 @@ test('the judge grows an orb still in hand, and adds a bonus to a hit that alrea
   assert.equal(late.duel.players[1].hp, 64, 'the 10 bonus lands on the head too: +15');
 });
 
-test('a missed throw earns no bonus, and an orb held too long is thrown for you', async () => {
+test('a missed throw earns no bonus, and an orb is never thrown on its own', async () => {
   let answer;
   const { duel } = makeDuel([new Promise((resolve) => (answer = resolve))]);
   const fired = await duel.fire(0, 'Closed_Fist');
@@ -273,11 +273,10 @@ test('a missed throw earns no bonus, and an orb held too long is thrown for you'
 
   const slow = makeDuel();
   await slow.duel.fire(0, 'Closed_Fist');
-  slow.duel.update(later(HOLD_LIMIT_MS + 50));
-  assert.equal(slow.duel.players[0].orb, null);
-  assert.equal(slow.duel.casts.get(1).state, 'flying', 'auto-thrown, not fizzled');
-  fly(slow.duel);
-  assert.ok(slow.duel.players[1].hp < 100, 'and it flies at the opponent');
+  slow.duel.update(later(20000));
+  assert.ok(slow.duel.players[0].orb, 'still in hand after 20 seconds');
+  assert.equal(slow.duel.casts.get(1).state, 'held', 'not thrown, not fizzled');
+  assert.equal(slow.duel.projectiles.length, 0);
 });
 
 test('a cheat crumbles the orb and backfires', async () => {

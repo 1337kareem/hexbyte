@@ -423,8 +423,8 @@ export class Renderer {
     // A pulsing halo shows the orb is charged.
     if (!REDUCED_MOTION) this.pixelRing(at.x, at.y, size * (0.85 + 0.15 * (Math.floor(t / 120) % 2)), PX, ELEMENT_COLORS[orb.element] ?? C.gold, 0.7);
     this.orbBlock(orb.element, at.x, at.y, size);
-    const left = Math.max(0, (orb.expiresAt - t) / 1000);
-    this.text(left < 2.5 ? `Throw! ${left.toFixed(1)}s` : 'Throw!', at.x, at.y - size / 2 - 14, 10, left < 2.5 ? C.danger : C.gold);
+    // How to throw it: let go on camera, the key again on the keyboard. No countdown.
+    if (player.kind !== 'bot') this.text(orb.prompt ?? 'Throw!', at.x, at.y - size / 2 - 14, 10, C.gold);
   }
 
   drawFlyingOrb(orb, toScreen, box, t) {

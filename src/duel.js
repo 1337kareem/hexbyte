@@ -31,9 +31,7 @@ import { ZONE_MULTIPLIERS, dodgePose, hitZone, standingPose, zonePoint } from '.
 
 const END_DELAY_MS = 2600;
 // An orb you never throw fizzles after this long (its mana is already spent).
-// An orb nobody throws gets thrown for them at the opponent after this long: every
-// attack gets thrown, none fizzles away.
-export const HOLD_LIMIT_MS = 4000;
+// An orb stays in the wizard's hand until they throw it. Nothing ever throws it for them.
 // Orb speed in frame heights per second: fast, but you can see it coming.
 export const ORB_SPEED = 1.1;
 // ✌️ Lightning doesn't fly: it strikes down from the sky where it was thrown. A target
@@ -89,7 +87,7 @@ export class Duel {
       words: '',
       auto: false,
       label: null,
-      // A charged orb in hand: { castId, element, power, expiresAt, at, aim, hand }.
+      // A charged orb in hand: { castId, element, power, at, aim, hand, gripped, prompt }.
       orb: null,
       // The brief shield arc, where it's aimed (a height on screen), and when it can go up again.
       barrierUntil: 0,
@@ -182,7 +180,7 @@ export class Duel {
     const castId = (this.castCount += 1);
     const cast = { castId, side, element, power: BASE_POWER, effect: spellEffect(element, BASE_POWER), state: 'held' };
     this.casts.set(castId, cast);
-    player.orb = { castId, element, power: BASE_POWER, expiresAt: t + HOLD_LIMIT_MS, at: null, aim: null, hand: null };
+    player.orb = { castId, element, power: BASE_POWER, at: null, aim: null, hand: null };
     player.status = 'armed';
     this.onEvent('armed', { side, element });
     if (!judging) {
@@ -402,17 +400,6 @@ export class Duel {
   }
 
   // Moves the orbs in the air and checks what they hit.
-  // Throws the orb in hand at a part of the opponent's body (an auto-throw, or the AI).
-  throwAt(side, zone = 'torso', t = now()) {
-    const player = this.players[side];
-    if (!player.orb) return false;
-    const body = this.bodyOf(side, t);
-    const from = player.orb.at ?? body?.[side === 0 ? 16 : 15] ?? { x: side === 0 ? 0.36 : 0.64, y: 0.52 };
-    const foe = this.bodyOf(1 - side, t);
-    const aim = foe?.[11] && foe[23] ? zonePoint(foe, zone) : { x: side === 0 ? 0.75 : 0.25, y: 0.5 };
-    return this.throwOrb(side, from, { x: aim.x - from.x, y: aim.y - from.y });
-  }
-
   // The spot a lightning throw is aimed at: follow the throw (a direction, with x scaled
   // by the aspect) to the opponent's body, and take its height there.
   strikeSpot(side, from, ux, uy, t) {
@@ -528,11 +515,6 @@ export class Duel {
     for (const [side, player] of this.players.entries()) {
       if (player.shield > 0 && t > player.shieldUntil) player.shield = 0;
       if (player.move && t >= player.move.until) player.move = null;
-      // Held too long: it's thrown for them, straight at the opponent.
-      if (player.orb && t > player.orb.expiresAt) {
-        this.floaters.push({ side, text: 'Auto-throw!', color: MUTED, start: t });
-        this.throwAt(side, 'torso', t);
-      }
     }
     this.effects = this.effects.filter((effect) => t - effect.start < effect.duration);
     this.floaters = this.floaters.filter((floater) => t - floater.start < 1200);

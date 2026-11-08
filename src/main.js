@@ -17,9 +17,9 @@ import { zonePoint } from './pose.js';
 import { GAP, Ritual, STEPS, clampToSide, inView } from './ritual.js';
 import { ELEMENT_COLORS, ELEMENT_NAMES, icon } from './icons.js';
 import { Renderer } from './render.js';
-import { THROW_SPEED, WRISTS, emptyTracks, swingOf, throwDirection, trackWrists } from './throws.js';
+import { WRISTS, emptyTracks, gripStep, releaseDirection, swingOf, trackWrists } from './throws.js';
 import { Vision } from './vision.js';
-import { listenOnce, stopListening, voiceAvailable } from './voice.js';
+import { listenOnce, voiceAvailable } from './voice.js';
 
 const $ = (selector) => document.querySelector(selector);
 const screens = { title: $('#title'), duel: $('#duel'), results: $('#results') };
@@ -1299,21 +1299,24 @@ const leadWrist = (body, side) => ((body[15].x - body[16].x) * (side === 0 ? 1 :
 // Each side's recent wrist positions, for spotting throws (src/throws.js).
 const wristTracks = [emptyTracks(), emptyTracks()];
 
+// The hand sign that holds each element's orb.
+const GESTURE_OF = Object.fromEntries(Object.entries(GESTURE_ELEMENTS).map(([gesture, name]) => [name, gesture]));
+
+// Orbs in hand follow the hand. On camera, holding the spell's hand sign grips the orb
+// and letting go throws it: nothing else throws it, and nothing throws it on its own.
 function updateOrbs(t) {
   duel.players.forEach((player, side) => {
     const tracked = trackedBody(side);
     if (tracked) trackWrists(wristTracks[side], tracked, t);
-    // A big swing while still talking: stop listening, and throw as soon as the orb appears.
-    if (tracked && player.status === 'listening' && swingOf(wristTracks[side], side, duel.aspect, THROW_SPEED * 1.3)) {
-      player.throwQueued = t;
-      stopListening();
-    }
     const orb = player.orb;
     if (!orb) return;
     const body = tracked ?? duel.standingBody(side, t);
     if (!tracked) {
       orb.at = body[leadWrist(body, side)];
-      if (player.kind !== 'bot') orb.aim = aimPoint(side, t);
+      if (player.kind !== 'bot') {
+        orb.aim = aimPoint(side, t);
+        orb.prompt = 'Press again to throw';
+      }
       return;
     }
     // On camera: the orb sits in the hand that made the gesture.
@@ -1325,16 +1328,11 @@ function updateOrbs(t) {
     }
     orb.at = body[orb.hand];
     orb.aim = null;
-    const queued = player.throwQueued && t - player.throwQueued < 1500;
-    player.throwQueued = null;
-    if (queued) {
-      duel.throwAt(side, 'torso', t);
-      return;
-    }
-    const swing = swingOf(wristTracks[side], side, duel.aspect);
-    if (!swing) return;
-    // Either hand can throw: the orb leaves from the hand that swung.
-    duel.throwOrb(side, swing.at, throwDirection(swing, zonePoint(bodyFor(1 - side, t), 'torso'), duel.aspect));
+    const step = gripStep(orb, vision.sides[side]?.held?.gesture === GESTURE_OF[orb.element], t);
+    orb.prompt = step === 'waiting' ? `${ELEMENT_ICONS[orb.element]} then let go` : 'Let go to throw';
+    if (step !== 'release') return;
+    const swing = swingOf(wristTracks[side], side, duel.aspect, undefined, [orb.hand]);
+    duel.throwOrb(side, orb.at, releaseDirection(swing, orb.at, zonePoint(bodyFor(1 - side, t), 'torso'), duel.aspect));
     wristTracks[side] = emptyTracks();
   });
 }

@@ -43,11 +43,12 @@ Open http://localhost:8788.
   your body can't cross into it, though your arm can reach in to throw.
 - **Charge, then throw.** Hold a gesture for half a second and say your incantation.
   A glowing orb of that element appears in your casting hand and follows it. Every
-  attack can be thrown (only the shield isn't). On camera, swing either arm: sideways
-  at your opponent and the orb follows your swing; forward at the screen or overhand
-  and it flies at your opponent; swing while still talking and it's thrown the moment
-  it appears. On the keyboard, press the spell key again while the aim marker sweeps up
-  and down your opponent. An orb held for 4 seconds is thrown for you.
+  attack is thrown (only the shield isn't), and only when you let go: on camera, the
+  orb stays in your hand while you hold the sign (✊ ✌️ 👍) and launches the moment you
+  open your hand. Swing as you let go to steer it: sideways and it follows the swing,
+  forward or overhand and it flies at your opponent; no swing and it goes straight
+  across at your hand's height. On the keyboard, press the spell key again while the aim
+  marker sweeps up and down your opponent. Nothing is ever thrown for you.
 - **Attacks:** ✊ fire (the biggest hit), ✌️ lightning, 👍 frost shard (freezes the
   target for 2–6 s so they can't cast).
 - **Lightning strikes from the sky.** It doesn't fly across: throw it and a target mark
