@@ -9,7 +9,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import express from 'express';
 import { SignJWT, jwtVerify } from 'jose';
 import { auth0Config, checkRitual, gateStatus, hasRitualGate, readWizard } from './auth.js';
-import { castSpell, hasPrune, pruneModel, setCustomerBudget, verifyReceipt } from './prune.js';
+import { castSpell, hasPrune, pruneModel, scoreSpell, setCustomerBudget, verifyReceipt } from './prune.js';
 import {
   CLUSTER,
   accountUrl,
@@ -64,8 +64,8 @@ export async function signMatch(match) {
 
 // The AI judge's rating of one incantation (1 to 10), signed so the browser can hand
 // it back at the end of the duel for the creativity score, but can't make one up.
-export function signRating({ matchId, side, rating }) {
-  const body = Buffer.from(JSON.stringify({ m: matchId, s: side, r: rating, n: randomUUID().slice(0, 12) })).toString('base64url');
+export function signRating({ matchId, side, rating, creativity = rating * 10 }) {
+  const body = Buffer.from(JSON.stringify({ m: matchId, s: side, r: rating, c: creativity, n: randomUUID().slice(0, 12) })).toString('base64url');
   return `${body}.${createHmac('sha256', matchKey()).update(`rating\n${body}`).digest('base64url').slice(0, 22)}`;
 }
 
@@ -75,13 +75,16 @@ export function readRating(token, matchId) {
   if (createHmac('sha256', matchKey()).update(`rating\n${body}`).digest('base64url').slice(0, 22) !== mac) return null;
   try {
     const rating = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    return rating.m === matchId && [0, 1].includes(rating.s) && Number.isInteger(rating.r) && rating.r >= 1 && rating.r <= 10 ? rating : null;
+    const creativityOk = rating.c === undefined || (Number.isInteger(rating.c) && rating.c >= 0 && rating.c <= 100);
+    return rating.m === matchId && [0, 1].includes(rating.s) && Number.isInteger(rating.r) && rating.r >= 1 && rating.r <= 10 && creativityOk
+      ? rating
+      : null;
   } catch {
     return null;
   }
 }
 
-// Creativity: the average of the AI judge's ratings of a player's incantations, out of 100.
+// Creativity: the average of the AI judge's creativity scores (out of 100) for a player's incantations.
 export function creativityScores(tokens, matchId) {
   const ratings = new Map();
   for (const token of Array.isArray(tokens) ? tokens.slice(0, 300) : []) {
@@ -90,8 +93,8 @@ export function creativityScores(tokens, matchId) {
     if (rating) ratings.set(rating.n, rating);
   }
   return [0, 1].map((side) => {
-    const mine = [...ratings.values()].filter((rating) => rating.s === side).map((rating) => rating.r);
-    return { score: mine.length ? Math.round((mine.reduce((sum, r) => sum + r, 0) / mine.length) * 10) : null, judged: mine.length };
+    const mine = [...ratings.values()].filter((rating) => rating.s === side).map((rating) => rating.c ?? rating.r * 10);
+    return { score: mine.length ? Math.round(mine.reduce((sum, c) => sum + c, 0) / mine.length) : null, judged: mine.length };
   });
 }
 
@@ -308,13 +311,16 @@ export async function createApp() {
       reply = { outcome, blockedBy: result.blockedBy, element, words, latencyMs, error: BLOCK_REASONS[result.blockedBy] };
     } else {
       // An AI opponent's spell is judged like anyone's, then kept inside its rank's range.
-      const power = player.kind === 'bot' ? botPower(player.rank, result.spell?.power) : clampPower(result.spell?.power);
+      // The judge scores creativity out of 100; a tenth of it is the spell's power.
+      const judged = scoreSpell(result.spell);
+      const power = player.kind === 'bot' ? botPower(player.rank, judged.power) : judged.power;
       reply = {
         outcome: 'cast',
         element,
         words,
         latencyMs,
         power,
+        creativity: judged.creativity,
         ...spellEffect(element, power),
         // The spell already landed at base power in the browser; this is the extra.
         bonus: judgeBonus(element, power),
@@ -324,7 +330,7 @@ export async function createApp() {
         // Exactly as Prune sent it, so its signature can be checked later.
         receipt: result.receipt?.receipt_signature ? result.receiptRaw : null,
         // The judge's own rating (before an AI's rank range), signed, for the creativity score.
-        rating: signRating({ matchId: match.id, side: player.side, rating: clampPower(result.spell?.power) }),
+        rating: signRating({ matchId: match.id, side: player.side, rating: judged.power, creativity: judged.creativity }),
       };
       // The Duel Ledger: the judged spell, with a fingerprint of its Prune receipt.
       reply.ledger = await writeMemo(memoFor(match, { type: 'cast', side: player.side, element, power, receipt: reply.receipt }));

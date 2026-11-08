@@ -40,6 +40,9 @@ export const ORB_SPEED = 1.1;
 export const STRIKE_DELAY_MS = 450;
 // A bolt hits a little wider than an orb.
 const STRIKE_SPLASH = 0.03;
+// A hit that lands before the judge's creativity score waits this long for it, so the
+// damage matches how creative the spell was. After that it deals base damage.
+export const JUDGE_WAIT_MS = 3000;
 // Keyboard and AI dodges. A new one can start as soon as the last one ends.
 const JUMP_MS = 650;
 const DUCK_MS = 700;
@@ -65,9 +68,11 @@ export class Duel {
   // onEvent(name, details) hears every moment worth a sound.
   // waitForStart: true holds everything (and the clock) until begin(), for the opening
   // ritual and the 3-2-1 countdown.
-  constructor({ match, listen, cast, onLog, onEnd, onEvent = () => {}, speakMs = SPEAK_MS, bodyOf = null, waitForStart = false }) {
+  // judgeWaitMs: 0 deals base damage at once on a hit before the verdict (and adds any bonus later).
+  constructor({ match, listen, cast, onLog, onEnd, onEvent = () => {}, speakMs = SPEAK_MS, bodyOf = null, waitForStart = false, judgeWaitMs = JUDGE_WAIT_MS }) {
     this.matchId = match.matchId;
     this.speakMs = speakMs;
+    this.judgeWaitMs = judgeWaitMs;
     this.listen = listen;
     this.cast = cast;
     this.onLog = onLog;
@@ -178,7 +183,8 @@ export class Duel {
     const t = now();
     if (judging) player.manaLeft -= 1;
     const castId = (this.castCount += 1);
-    const cast = { castId, side, element, power: BASE_POWER, effect: spellEffect(element, BASE_POWER), state: 'held' };
+    // judging: the creativity score is on its way, and it sets this spell's power.
+    const cast = { castId, side, element, power: BASE_POWER, effect: spellEffect(element, BASE_POWER), state: 'held', judging };
     this.casts.set(castId, cast);
     player.orb = { castId, element, power: BASE_POWER, at: null, aim: null, hand: null };
     player.status = 'armed';
@@ -197,6 +203,7 @@ export class Duel {
       .then((reply) => {
         this.pending -= 1;
         player.judging -= 1;
+        cast.judging = false;
         this.verdict(castId, player.words, reply);
       });
     return { judged, castId };
@@ -304,9 +311,10 @@ export class Duel {
     if (reply.outcome === 'cast') {
       const power = reply.power;
       const bonus = reply.bonus ?? {};
-      if (cast.state === 'held' || cast.state === 'flying') {
-        // Still in play: the orb grows to the judged power.
-        cast.power = Math.max(cast.power, power);
+      const score = Number.isFinite(reply.creativity) ? `Creativity ${reply.creativity}` : `Judge ${power}/10`;
+      if (cast.state === 'held' || cast.state === 'flying' || cast.pendingHit) {
+        // The judge sets the spell's power, up for a creative incantation, down for a lazy one.
+        cast.power = power;
         cast.effect = spellEffect(element, cast.power);
         if (player.orb?.castId === castId) player.orb.power = cast.power;
         const flying = this.projectiles.find((p) => p.castId === castId);
@@ -314,7 +322,10 @@ export class Duel {
           flying.power = cast.power;
           flying.radius = orbRadius(cast.power);
         }
-        this.floaters.push({ side, text: power > BASE_POWER ? `Judge ${power}/10: power up!` : `Judge ${power}/10`, color: power > BASE_POWER ? GOLD : MUTED, start: t });
+        const text = power > BASE_POWER ? `${score}: power up!` : power < BASE_POWER ? `${score}: weak spell` : score;
+        this.floaters.push({ side, text, color: power > BASE_POWER ? GOLD : MUTED, start: t });
+        // It already hit and was waiting for this: the damage lands now, at the judged power.
+        if (cast.pendingHit) this.applyHit(cast, t);
       } else if (cast.state === 'hit' && bonus.damage > 0) {
         // Already hit: the extra lands on the same spot, with the same multiplier.
         const extra = Math.max(1, Math.round(bonus.damage * cast.multiplier));
@@ -330,6 +341,8 @@ export class Duel {
       }
     } else if (reply.outcome === 'cheat') {
       // A cheater's orb crumbles in their hand (or in the air), and it backfires.
+      // A hit that was waiting for this verdict does nothing.
+      cast.pendingHit = null;
       this.destroyCast(castId, 'fizzled');
       player.hp = Math.max(0, player.hp - BACKFIRE_DAMAGE);
       this.effects.push({ type: 'backfire', side, start: t, duration: 700 });
@@ -337,11 +350,13 @@ export class Duel {
       this.banner('BACKFIRE!', 'Prune caught a cheating incantation', '#f87171');
       this.onEvent('backfire', { side, hp: player.hp });
     } else if (reply.outcome === 'out_of_mana') {
+      if (cast.pendingHit) this.applyHit(cast, t);
       player.manaLeft = 0;
       this.banner('OUT OF MANA', `No more judging for ${player.name}: attacks fly at base power`, '#fbbf24');
       this.onEvent('outOfMana', { side });
     } else {
-      // The orb is still real; only the bonus is lost.
+      // The orb is still real; it just stays at base power.
+      if (cast.pendingHit) this.applyHit(cast, t);
       this.floaters.push({ side, text: 'No verdict', color: MUTED, start: t });
       this.onEvent('fizzle', { side });
     }
@@ -356,6 +371,7 @@ export class Duel {
       this.settle(cast.side);
     }
     this.projectiles = this.projectiles.filter((p) => p.castId !== castId);
+    this.strikes = this.strikes.filter((strike) => strike.castId !== castId);
     if (cast.state === 'held' || cast.state === 'flying') cast.state = state;
   }
 
@@ -488,16 +504,27 @@ export class Duel {
   land(orb, cast, target, zone, t) {
     // Lightning comes down from above, so it has no headshot bonus: a head strike counts as a body hit.
     const multiplier = orb.element === 'lightning' && zone === 'head' ? ZONE_MULTIPLIERS.torso : ZONE_MULTIPLIERS[zone];
-    const effect = spellEffect(orb.element, orb.power);
-    const damage = Math.max(1, Math.round(effect.damage * multiplier));
     Object.assign(cast, { state: 'hit', zone, multiplier, target });
     this.effects.push({ type: 'impact', point: { x: orb.x, y: orb.y }, element: orb.element, zone, start: t, duration: 500 });
-    const result = this.hit(target, damage, 0, orb.element, zone);
-    const attacker = this.players[orb.side].stats;
-    attacker.hits += 1;
-    attacker.damage += result?.dealt ?? 0;
-    if (orb.element === 'frost' && result?.dealt > 0) this.freeze(target, effect.freezeMs);
-    this.onEvent('landed', { castId: orb.castId, side: orb.side, target, element: orb.element, power: orb.power, zone, damage: result?.dealt ?? 0 });
+    this.players[orb.side].stats.hits += 1;
+    // The judge hasn't scored it yet: the damage waits for the creativity score.
+    if (cast.judging && this.judgeWaitMs > 0) {
+      cast.pendingHit = { t };
+      this.floaters.push({ side: target, text: 'Hit! Judging…', color: MUTED, start: t });
+      return;
+    }
+    this.applyHit(cast, t);
+  }
+
+  // Deals a landed spell's damage at its current power (judged, or base).
+  applyHit(cast, t) {
+    cast.pendingHit = null;
+    const effect = spellEffect(cast.element, cast.power);
+    const damage = Math.max(1, Math.round(effect.damage * cast.multiplier));
+    const result = this.hit(cast.target, damage, 0, cast.element, cast.zone);
+    this.players[cast.side].stats.damage += result?.dealt ?? 0;
+    if (cast.element === 'frost' && result?.dealt > 0) this.freeze(cast.target, effect.freezeMs);
+    this.onEvent('landed', { castId: cast.castId, side: cast.side, target: cast.target, element: cast.element, power: cast.power, zone: cast.zone, damage: result?.dealt ?? 0 });
   }
 
   // Called every animation frame.
@@ -509,6 +536,10 @@ export class Duel {
     if (!this.over) {
       this.moveProjectiles(t);
       this.resolveStrikes(t);
+      // A hit still waiting on a slow judge deals base damage after JUDGE_WAIT_MS.
+      for (const cast of this.casts.values()) {
+        if (cast.pendingHit && t - cast.pendingHit.t >= this.judgeWaitMs) this.applyHit(cast, t);
+      }
     }
     this.lastUpdate = t;
 

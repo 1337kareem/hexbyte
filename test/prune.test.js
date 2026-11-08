@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { rawObjectAfter, readJson, replyText, tamperWith } from '../server/prune.js';
+import { rawObjectAfter, readJson, replyText, scoreSpell, tamperWith } from '../server/prune.js';
 
 test('reads replies in both Gemini and OpenAI formats', () => {
   assert.equal(replyText({ candidates: [{ content: { parts: [{ text: '{"a":' }, { text: '1}' }] } }] }), '{"a":1}');
@@ -46,4 +46,14 @@ test('a busy Gemini (503) is retried once on the backup model', async () => {
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('the judge scores creativity out of 100 with a rubric, and a tenth of it is the power', () => {
+  const lazy = scoreSpell({ originality: 1, imagery: 0, wit: 0, fit: 4, effort: 0 });
+  assert.deepEqual(lazy, { creativity: 5, power: 1 });
+  const great = scoreSpell({ originality: 27, imagery: 22, wit: 17, fit: 14, effort: 9 });
+  assert.deepEqual(great, { creativity: 89, power: 9 });
+  assert.equal(scoreSpell({ originality: 300, imagery: 250, wit: 200, fit: 150, effort: 100 }).creativity, 100, 'each part is capped');
+  assert.deepEqual(scoreSpell({ power: 6 }), { creativity: 60, power: 6 }, 'an old-style reply still works');
+  assert.deepEqual(scoreSpell(null), { creativity: 0, power: 1 });
 });

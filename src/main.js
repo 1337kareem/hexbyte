@@ -676,7 +676,10 @@ function addLog(entry) {
   if (entry.outcome === 'cast') {
     const detail = landedDetail(entry);
     item.append(
-      element('p', { className: 'result', textContent: `${entry.name} · power ${entry.power} · ${detail}` }),
+      element('p', {
+        className: 'result',
+        textContent: `${entry.name} · ${Number.isFinite(entry.creativity) ? `creativity ${entry.creativity}/100 · ` : ''}power ${entry.power} · ${detail}`,
+      }),
       element('p', {
         className: 'cost',
         textContent: `Cost $${Number(entry.costUsd ?? 0).toFixed(6)}${entry.effectText ? ` · ${entry.effectText}` : ''}`,

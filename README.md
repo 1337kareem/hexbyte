@@ -72,10 +72,12 @@ Open http://localhost:8788.
 - A legend under the arena shows every hand sign as an emoji, what it does and its keys.
   The sign the camera sees pops up over your hand, and the spell's emoji shows beside
   the caster's head while they speak. Listening stops half a second after your last word.
-- **Judged while you throw.** The orb starts at base power 4. The AI judge's verdict
-  comes back through Prune a few seconds later: if the orb is still in your hand or in
-  the air, it grows to the judged power; if it already hit, the extra lands on the same
-  spot with the same multiplier; if it missed or was blocked, there's no bonus.
+- **Creativity is your damage.** The AI judge scores every incantation out of 100
+  (originality, imagery, wit, fit with the element, effort), and a tenth of that is the
+  spell's power, so "Fire." hits for about 8 and a vivid, original line for over 20. The
+  score sets the power up or down: an orb still in your hand or in the air grows or
+  shrinks, and a hit that lands before the score waits for it ("Hit! Judging…") so its
+  damage matches. If the judge takes over 3 s, the hit deals base damage.
 - Duels last 90 seconds and end with a knockout or the clock. Mana is how many spells
   the AI judge scores through Prune (its step limit): 8 for guests, 9 for Auth0 wizards,
   10 for wizards who passed the Ritual Gate. The AI gets 7 (Easy), 8 (Medium) or 10

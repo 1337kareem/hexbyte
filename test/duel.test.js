@@ -4,7 +4,8 @@ import { Duel, arcCrossing } from '../src/duel.js';
 import { judgeBonus } from '../shared/rules.js';
 
 // A duel where each cast gets the next reply in the queue (a value or a promise).
-function makeDuel(replies = []) {
+// judgeWaitMs 0: a hit deals base damage at once, as if the judge were instant to wait for.
+function makeDuel(replies = [], { judgeWaitMs = 0 } = {}) {
   const events = [];
   const log = [];
   const queue = [...replies];
@@ -22,6 +23,7 @@ function makeDuel(replies = []) {
     onEnd: () => {},
     onEvent: (name, details) => events.push({ name, ...details }),
     speakMs: 0,
+    judgeWaitMs,
   });
   duel.aspect = 16 / 9;
   return { duel, events, log, names: () => events.map((event) => event.name) };
@@ -336,4 +338,50 @@ test('an orb crossing into the arc is caught; one coming in beside it is not', (
   assert.ok(arcCrossing(arc, { x: 0.25, y: 0.5 }, { x: 0.31, y: 0.5 }, 1), 'straight in through the middle');
   assert.equal(arcCrossing(arc, { x: 0.5, y: 0.25 }, { x: 0.5, y: 0.31 }, 1), null, 'from above, outside the arc');
   assert.equal(arcCrossing(null, { x: 0, y: 0 }, { x: 1, y: 1 }, 1), null);
+});
+
+test('damage follows creativity: a hit waits for the score, then lands at the judged power', async () => {
+  const hitWith = async (power) => {
+    let answer;
+    const { duel } = makeDuel([new Promise((resolve) => (answer = resolve))], { judgeWaitMs: 3000 });
+    const fired = await duel.fire(0, 'Closed_Fist');
+    throwAt(duel, 0.52);
+    fly(duel);
+    assert.equal(duel.players[1].hp, 100, 'the hit waits for the score');
+    assert.ok(duel.casts.get(1).pendingHit);
+    answer({ outcome: 'cast', element: 'fire', power, creativity: power * 10, bonus: judgeBonus('fire', power) });
+    await fired.judged;
+    return 100 - duel.players[1].hp;
+  };
+  const lazy = await hitWith(1);
+  const creative = await hitWith(9);
+  assert.equal(lazy, 8, '"Fire." hits for 8');
+  assert.equal(creative, 24, 'a creative line hits for 24');
+  assert.ok(creative > 2 * lazy, 'creativity is the damage');
+});
+
+test('a lazy incantation shrinks an orb still in hand, a creative one grows it', async () => {
+  const { duel } = makeDuel([{ outcome: 'cast', element: 'fire', power: 2, creativity: 20, bonus: judgeBonus('fire', 2) }]);
+  const fired = await duel.fire(0, 'Closed_Fist');
+  await fired.judged;
+  assert.equal(duel.players[0].orb.power, 2, 'weaker than base power 4');
+});
+
+test('a hit with a slow judge deals base damage after the wait, and a cheat verdict cancels a waiting hit', async () => {
+  const slow = makeDuel([new Promise(() => {})], { judgeWaitMs: 3000 });
+  await slow.duel.fire(0, 'Closed_Fist');
+  throwAt(slow.duel, 0.52);
+  const t = fly(slow.duel);
+  slow.duel.update(t + 3100);
+  assert.equal(slow.duel.players[1].hp, 86, 'base damage after 3 seconds');
+
+  let answer;
+  const cheat = makeDuel([new Promise((resolve) => (answer = resolve))], { judgeWaitMs: 3000 });
+  const fired = await cheat.duel.fire(0, 'Closed_Fist');
+  throwAt(cheat.duel, 0.52);
+  fly(cheat.duel);
+  answer({ outcome: 'cheat', element: 'fire', blockedBy: 'prompt_injection' });
+  await fired.judged;
+  assert.equal(cheat.duel.players[1].hp, 100, 'the cheat does no damage');
+  assert.ok(cheat.duel.players[0].hp < 100, 'and backfires');
 });
