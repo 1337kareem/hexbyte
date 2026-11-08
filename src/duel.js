@@ -31,7 +31,9 @@ import { ZONE_MULTIPLIERS, dodgePose, hitZone, standingPose, zonePoint } from '.
 
 const END_DELAY_MS = 2600;
 // An orb you never throw fizzles after this long (its mana is already spent).
-export const HOLD_LIMIT_MS = 6000;
+// An orb nobody throws gets thrown for them at the opponent after this long: every
+// attack gets thrown, none fizzles away.
+export const HOLD_LIMIT_MS = 4000;
 // Orb speed in frame heights per second: fast, but you can see it coming.
 export const ORB_SPEED = 1.1;
 // ✌️ Lightning doesn't fly: it strikes down from the sky where it was thrown. A target
@@ -45,7 +47,8 @@ const JUMP_MS = 650;
 const DUCK_MS = 700;
 // The shield is an arc in front of the wizard: this wide either side of where it's
 // aimed, reaching this many shoulder-widths out (at least SHIELD_MIN_REACH).
-export const SHIELD_HALF_ANGLE = Math.PI / 4;
+// 15° either side: a third of the old 45°, so it has to be aimed at the incoming throw.
+export const SHIELD_HALF_ANGLE = Math.PI / 12;
 const SHIELD_REACH = 1.6;
 const SHIELD_MIN_REACH = 0.11;
 // It can tilt up or down this far from straight ahead.
@@ -399,6 +402,17 @@ export class Duel {
   }
 
   // Moves the orbs in the air and checks what they hit.
+  // Throws the orb in hand at a part of the opponent's body (an auto-throw, or the AI).
+  throwAt(side, zone = 'torso', t = now()) {
+    const player = this.players[side];
+    if (!player.orb) return false;
+    const body = this.bodyOf(side, t);
+    const from = player.orb.at ?? body?.[side === 0 ? 16 : 15] ?? { x: side === 0 ? 0.36 : 0.64, y: 0.52 };
+    const foe = this.bodyOf(1 - side, t);
+    const aim = foe?.[11] && foe[23] ? zonePoint(foe, zone) : { x: side === 0 ? 0.75 : 0.25, y: 0.5 };
+    return this.throwOrb(side, from, { x: aim.x - from.x, y: aim.y - from.y });
+  }
+
   // The spot a lightning throw is aimed at: follow the throw (a direction, with x scaled
   // by the aspect) to the opponent's body, and take its height there.
   strikeSpot(side, from, ux, uy, t) {
@@ -424,8 +438,8 @@ export class Duel {
       const point = { x: strike.x, y: strike.y };
       const radius = orbRadius(cast.power) + STRIKE_SPLASH;
       this.effects.push({ type: 'strike', point, start: t, duration: 420 });
-      const arc = this.barrier(target, t);
-      if (arc && Math.hypot((point.x - arc.cx) * this.aspect, point.y - arc.cy) <= arc.r + radius) {
+      // A bolt is stopped by a shield aimed at the height it comes down at (within reach).
+      if (arcCovers(this.barrier(target, t), point, this.aspect, radius)) {
         cast.state = 'blocked';
         this.players[target].stats.blocks += 1;
         this.effects.push({ type: 'impact', point, element: 'shield', start: t, duration: 450 });
@@ -458,7 +472,7 @@ export class Duel {
       const cast = this.casts.get(orb.castId);
 
       // The target's shield arc blocks any orb that comes in through it.
-      const blockedAt = arcCrossing(this.barrier(target, t), before, orb, this.aspect);
+      const blockedAt = arcCrossing(this.barrier(target, t), before, orb, this.aspect, orb.radius);
       if (blockedAt) {
         cast.state = 'blocked';
         this.players[target].stats.blocks += 1;
@@ -514,11 +528,10 @@ export class Duel {
     for (const [side, player] of this.players.entries()) {
       if (player.shield > 0 && t > player.shieldUntil) player.shield = 0;
       if (player.move && t >= player.move.until) player.move = null;
-      // Held too long: the orb fizzles in the wizard's hand.
+      // Held too long: it's thrown for them, straight at the opponent.
       if (player.orb && t > player.orb.expiresAt) {
-        this.floaters.push({ side, text: 'Fizzled! Throw it faster', color: MUTED, start: t });
-        this.onEvent('fizzle', { side });
-        this.destroyCast(player.orb.castId, 'fizzled');
+        this.floaters.push({ side, text: 'Auto-throw!', color: MUTED, start: t });
+        this.throwAt(side, 'torso', t);
       }
     }
     this.effects = this.effects.filter((effect) => t - effect.start < effect.duration);
@@ -569,7 +582,7 @@ export class Duel {
 
 // Where an orb moving from `before` to `after` comes in through a shield arc, or null.
 // Works in width-corrected units, so the arc is round on screen.
-export function arcCrossing(arc, before, after, aspect) {
+export function arcCrossing(arc, before, after, aspect, pad = 0) {
   if (!arc) return null;
   const rel = (p) => ({ x: (p.x - arc.cx) * aspect, y: p.y - arc.cy });
   const a = rel(before);
@@ -577,8 +590,19 @@ export function arcCrossing(arc, before, after, aspect) {
   if (Math.hypot(a.x, a.y) <= arc.r || Math.hypot(b.x, b.y) > arc.r) return null;
   const angle = Math.atan2(b.y, b.x);
   const off = Math.atan2(Math.sin(angle - arc.angle), Math.cos(angle - arc.angle));
-  if (Math.abs(off) > arc.span) return null;
+  // An orb that clips the arc's edge with its body counts as blocked.
+  if (Math.abs(off) > arc.span + Math.atan2(pad, arc.r)) return null;
   return { x: arc.cx + (Math.cos(angle) * arc.r) / aspect, y: arc.cy + Math.sin(angle) * arc.r };
+}
+
+// Does the shield cover a lightning strike? The bolt has to land within the shield's
+// reach and inside the band of heights the arc covers (give or take pad), so the
+// shield has to be aimed at the strike's mark.
+export function arcCovers(arc, point, aspect, pad = 0) {
+  if (!arc) return false;
+  if (Math.hypot((point.x - arc.cx) * aspect, point.y - arc.cy) > arc.r + pad) return false;
+  const [low, high] = [Math.sin(arc.angle - arc.span), Math.sin(arc.angle + arc.span)].sort((a, b) => a - b);
+  return point.y >= arc.cy + arc.r * low - pad && point.y <= arc.cy + arc.r * high + pad;
 }
 
 // Bigger power, bigger orb (and a bigger target to hit with).

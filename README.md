@@ -42,10 +42,12 @@ Open http://localhost:8788.
   cast until you're back ("Get in view!"). A strip down the middle of the arena keeps the wizards apart;
   your body can't cross into it, though your arm can reach in to throw.
 - **Charge, then throw.** Hold a gesture for half a second and say your incantation.
-  A glowing orb of that element appears in your casting hand and follows it. Throw it:
-  on camera, swing your arm toward your opponent and the orb flies along your swing;
-  on the keyboard, press the same spell key again while the aim marker sweeps up and
-  down your opponent. An orb you hold for more than 6 seconds fizzles.
+  A glowing orb of that element appears in your casting hand and follows it. Every
+  attack can be thrown (only the shield isn't). On camera, swing either arm: sideways
+  at your opponent and the orb follows your swing; forward at the screen or overhand
+  and it flies at your opponent; swing while still talking and it's thrown the moment
+  it appears. On the keyboard, press the spell key again while the aim marker sweeps up
+  and down your opponent. An orb held for 4 seconds is thrown for you.
 - **Attacks:** ✊ fire (the biggest hit), ✌️ lightning, 👍 frost shard (freezes the
   target for 2–6 s so they can't cast).
 - **Lightning strikes from the sky.** It doesn't fly across: throw it and a target mark
@@ -59,7 +61,8 @@ Open http://localhost:8788.
 - **Shield ✋:** an arc pulled out in front of you for 1.4 s. It blocks any orb that comes in
   through it, but only covers about 90°: on camera it follows your open palm, so raise it
   for high throws and lower it for low ones (keyboard players hold it at chest height).
-  You can raise it again 3 s after it went up; the bar under your HP shows it refilling
+  It covers 15° either side of where it's aimed, so aim it at the incoming throw (or at
+  a lightning mark's height). You can raise it again 3 s after it went up; the bar under your HP shows it refilling
   and turns green when it's ready. No incantation, no mana.
 - **Spam attacks; only the shield has a cooldown.** Attacks and dodges have no cooldown
   and no limit: throw your orb and cast again right away, the same attack as often as

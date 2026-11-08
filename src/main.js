@@ -17,8 +17,9 @@ import { zonePoint } from './pose.js';
 import { GAP, Ritual, STEPS, clampToSide, inView } from './ritual.js';
 import { ELEMENT_COLORS, ELEMENT_NAMES, icon } from './icons.js';
 import { Renderer } from './render.js';
+import { THROW_SPEED, WRISTS, emptyTracks, swingOf, throwDirection, trackWrists } from './throws.js';
 import { Vision } from './vision.js';
-import { listenOnce, voiceAvailable } from './voice.js';
+import { listenOnce, stopListening, voiceAvailable } from './voice.js';
 
 const $ = (selector) => document.querySelector(selector);
 const screens = { title: $('#title'), duel: $('#duel'), results: $('#results') };
@@ -39,10 +40,6 @@ const KEYS = {
 };
 // Dodges for keyboard players: jump clears low throws, duck clears high ones.
 const DODGE_KEYS = { a: [0, 'jump'], s: [0, 'duck'], j: [1, 'jump'], k: [1, 'duck'] };
-// A real throw on camera: the wrist moving toward the opponent at least this fast
-// (frame heights per second), measured over the last THROW_WINDOW_MS.
-const THROW_SPEED = 1.5;
-const THROW_WINDOW_MS = 180;
 // The keyboard aim marker sweeps from head to feet in this long.
 const AIM_SWEEP_MS = 1600;
 const FRAME_EVERY_MS = 100;
@@ -1299,11 +1296,20 @@ function bodyFor(side, t = performance.now()) {
 const leadWrist = (body, side) => ((body[15].x - body[16].x) * (side === 0 ? 1 : -1) > 0 ? 15 : 16);
 
 // Keeps each orb in its wizard's hand, sweeps the keyboard aim, and spots real throws.
+// Each side's recent wrist positions, for spotting throws (src/throws.js).
+const wristTracks = [emptyTracks(), emptyTracks()];
+
 function updateOrbs(t) {
   duel.players.forEach((player, side) => {
+    const tracked = trackedBody(side);
+    if (tracked) trackWrists(wristTracks[side], tracked, t);
+    // A big swing while still talking: stop listening, and throw as soon as the orb appears.
+    if (tracked && player.status === 'listening' && swingOf(wristTracks[side], side, duel.aspect, THROW_SPEED * 1.3)) {
+      player.throwQueued = t;
+      stopListening();
+    }
     const orb = player.orb;
     if (!orb) return;
-    const tracked = trackedBody(side);
     const body = tracked ?? duel.standingBody(side, t);
     if (!tracked) {
       orb.at = body[leadWrist(body, side)];
@@ -1314,25 +1320,22 @@ function updateOrbs(t) {
     if (orb.hand == null) {
       const held = vision.sides[side]?.held?.hand;
       orb.hand = held
-        ? [15, 16].reduce((best, i) => (Math.hypot(body[i].x - held.x, body[i].y - held.y) < Math.hypot(body[best].x - held.x, body[best].y - held.y) ? i : best))
+        ? WRISTS.reduce((best, i) => (Math.hypot(body[i].x - held.x, body[i].y - held.y) < Math.hypot(body[best].x - held.x, body[best].y - held.y) ? i : best))
         : leadWrist(body, side);
-      orb.track = [];
     }
     orb.at = body[orb.hand];
     orb.aim = null;
-    const last = orb.track.at(-1);
-    if (!last || last.x !== orb.at.x || last.y !== orb.at.y) orb.track.push({ x: orb.at.x, y: orb.at.y, t });
-    orb.track = orb.track.filter((sample) => t - sample.t <= THROW_WINDOW_MS);
-    if (orb.track.length < 2) return;
-    const first = orb.track[0];
-    const seconds = (t - first.t) / 1000;
-    if (seconds < 0.05) return;
-    const dx = orb.at.x - first.x;
-    const dy = orb.at.y - first.y;
-    const speed = Math.hypot(dx * duel.aspect, dy) / seconds;
-    const toward = (side === 0 ? 1 : -1) * dx * duel.aspect;
-    // A fast swing toward the opponent lets the orb go, along the swing.
-    if (speed >= THROW_SPEED && toward > 0.5 * Math.hypot(dx * duel.aspect, dy)) duel.throwOrb(side, orb.at, { x: dx, y: dy });
+    const queued = player.throwQueued && t - player.throwQueued < 1500;
+    player.throwQueued = null;
+    if (queued) {
+      duel.throwAt(side, 'torso', t);
+      return;
+    }
+    const swing = swingOf(wristTracks[side], side, duel.aspect);
+    if (!swing) return;
+    // Either hand can throw: the orb leaves from the hand that swung.
+    duel.throwOrb(side, swing.at, throwDirection(swing, zonePoint(bodyFor(1 - side, t), 'torso'), duel.aspect));
+    wristTracks[side] = emptyTracks();
   });
 }
 
